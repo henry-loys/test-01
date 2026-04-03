@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>짤 생성기 - 밈 메이커</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            dark: { 900: '#0a0a0a', 800: '#141414', 700: '#1e1e1e', 600: '#2a2a2a', 500: '#3a3a3a' },
+            accent: { DEFAULT: '#6366f1', light: '#818cf8', dark: '#4f46e5' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&family=Anton&family=Bangers&family=Lobster&family=Oswald:wght@700&family=Permanent+Marker&family=Press+Start+2P&display=swap');
+    body { background: #0a0a0a; }
+    input[type="range"] { -webkit-appearance: none; background: transparent; }
+    input[type="range"]::-webkit-slider-track { height: 6px; border-radius: 3px; background: #3a3a3a; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #6366f1; margin-top: -6px; cursor: pointer; }
+    input[type="color"] { -webkit-appearance: none; border: none; padding: 0; cursor: pointer; }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch { border: 2px solid #3a3a3a; border-radius: 6px; }
+    .drop-zone-active { border-color: #6366f1 !important; background: rgba(99,102,241,0.1) !important; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #141414; }
+    ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
+  </style>
+</head>
+<body class="text-gray-200 min-h-screen">
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // React Hooks Destructuring
+    // ========================================
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+    // ========================================
+    // Constants
+    // ========================================
+    const FONTS = [
+      { name: 'Impact', value: 'Impact', label: 'Impact (클래식 밈)' },
+      { name: 'Anton', value: 'Anton', label: 'Anton' },
+      { name: 'Bangers', value: 'Bangers', label: 'Bangers' },
+      { name: 'Lobster', value: 'Lobster', label: 'Lobster' },
+      { name: 'Oswald', value: 'Oswald', label: 'Oswald' },
+      { name: 'Permanent Marker', value: 'Permanent Marker', label: 'Permanent Marker' },
+      { name: 'Press Start 2P', value: 'Press Start 2P', label: 'Press Start 2P (픽셀)' },
+      { name: 'Noto Sans KR', value: 'Noto Sans KR', label: 'Noto Sans KR (한글)' },
+    ];
+
+    const PRESETS = [
+      { name: '흰색', color: '#ffffff' },
+      { name: '검정', color: '#000000' },
+      { name: '빨강', color: '#ef4444' },
+      { name: '파랑', color: '#3b82f6' },
+      { name: '초록', color: '#22c55e' },
+      { name: '노랑', color: '#eab308' },
+      { name: '보라', color: '#a855f7' },
+      { name: '주황', color: '#f97316' },
+      { name: '분홍', color: '#ec4899' },
+      { name: '그라데이션 1', gradient: 'linear-gradient(135deg, #667eea, #764ba2)' },
+      { name: '그라데이션 2', gradient: 'linear-gradient(135deg, #f093fb, #f5576c)' },
+      { name: '그라데이션 3', gradient: 'linear-gradient(135deg, #4facfe, #00f2fe)' },
+    ];
+
+    // ========================================
+    // Design System Components
+    // ========================================
+    function Button({ children, variant = 'primary', size = 'md', disabled, onClick, className = '', ...props }) {
+      const base = 'font-semibold rounded-lg transition-all duration-200 inline-flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-accent/50';
+      const variants = {
+        primary: 'bg-accent hover:bg-accent-dark text-white shadow-lg shadow-accent/20',
+        secondary: 'bg-dark-600 hover:bg-dark-500 text-gray-200 border border-dark-500',
+        danger: 'bg-red-600 hover:bg-red-700 text-white',
+        ghost: 'bg-transparent hover:bg-dark-600 text-gray-400 hover:text-gray-200',
+      };
+      const sizes = { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2 text-sm', lg: 'px-6 py-3 text-base' };
+      return (
+        <button
+          className={`${base} ${variants[variant]} ${sizes[size]} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${className}`}
+          disabled={disabled}
+          onClick={onClick}
+          {...props}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Card({ children, className = '' }) {
+      return <div className={`bg-dark-800 border border-dark-600 rounded-xl p-5 ${className}`}>{children}</div>;
+    }
+
+    function Label({ children, className = '' }) {
+      return <label className={`block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider ${className}`}>{children}</label>;
+    }
+
+    function TextInput({ label, value, onChange, placeholder, className = '' }) {
+      return (
+        <div className={className}>
+          {label && <Label>{label}</Label>}
+          <input
+            type="text"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="w-full bg-dark-700 border border-dark-500 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition"
+          />
+        </div>
+      );
+    }
+
+    function SelectInput({ label, value, onChange, options, className = '' }) {
+      return (
+        <div className={className}>
+          {label && <Label>{label}</Label>}
+          <select
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className="w-full bg-dark-700 border border-dark-500 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-accent cursor-pointer"
+          >
+            {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      );
+    }
+
+    function RangeSlider({ label, value, onChange, min, max, step = 1, unit = '', className = '' }) {
+      return (
+        <div className={className}>
+          {label && (
+            <div className="flex justify-between items-center mb-1.5">
+              <Label className="mb-0">{label}</Label>
+              <span className="text-xs text-accent font-mono">{value}{unit}</span>
+            </div>
+          )}
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={e => onChange(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
+      );
+    }
+
+    function ColorPicker({ label, value, onChange, className = '' }) {
+      return (
+        <div className={`flex items-center gap-2 ${className}`}>
+          {label && <Label className="mb-0 whitespace-nowrap">{label}</Label>}
+          <div className="relative">
+            <input
+              type="color"
+              value={value}
+              onChange={e => onChange(e.target.value)}
+              className="w-8 h-8 rounded-md cursor-pointer"
+            />
+          </div>
+          <span className="text-xs font-mono text-gray-500">{value}</span>
+        </div>
+      );
+    }
+
+    function ToggleGroup({ options, value, onChange, className = '' }) {
+      return (
+        <div className={`flex rounded-lg overflow-hidden border border-dark-500 ${className}`}>
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => onChange(opt.value)}
+              className={`flex-1 px-3 py-1.5 text-xs font-medium transition-all ${
+                value === opt.value
+                  ? 'bg-accent text-white'
+                  : 'bg-dark-700 text-gray-400 hover:text-gray-200 hover:bg-dark-600'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    // ========================================
+    // Section Component
+    // ========================================
+    function Section({ title, children, defaultOpen = true }) {
+      const [open, setOpen] = useState(defaultOpen);
+      return (
+        <div className="border-b border-dark-600 last:border-0">
+          <button
+            onClick={() => setOpen(!open)}
+            className="w-full flex items-center justify-between py-3 px-1 text-sm font-semibold text-gray-300 hover:text-white transition"
+          >
+            {title}
+            <svg className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {open && <div className="pb-4 space-y-3">{children}</div>}
+        </div>
+      );
+    }
+
+    // ========================================
+    // DropZone Component
+    // ========================================
+    function DropZone({ onImageLoad }) {
+      const [dragging, setDragging] = useState(false);
+      const inputRef = useRef(null);
+
+      const handleFile = useCallback((file) => {
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => onImageLoad(img);
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }, [onImageLoad]);
+
+      const onDrop = useCallback((e) => {
+        e.preventDefault();
+        setDragging(false);
+        const file = e.dataTransfer.files[0];
+        handleFile(file);
+      }, [handleFile]);
+
+      return (
+        <div
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          onClick={() => inputRef.current?.click()}
+          className={`border-2 border-dashed border-dark-500 rounded-xl p-8 text-center cursor-pointer transition-all hover:border-accent/50 ${dragging ? 'drop-zone-active' : ''}`}
+        >
+          <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFile(e.target.files[0])} />
+          <svg className="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <p className="text-sm text-gray-400 mb-1">이미지를 드래그하거나 클릭하여 업로드</p>
+          <p className="text-xs text-gray-600">PNG, JPG, GIF, WebP 지원</p>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Template Presets Component
+    // ========================================
+    function TemplatePresets({ onSelect }) {
+      return (
+        <div>
+          <Label>배경 템플릿</Label>
+          <div className="grid grid-cols-6 gap-2">
+            {PRESETS.map((p, i) => (
+              <button
+                key={i}
+                onClick={() => onSelect(p)}
+                className="w-full aspect-square rounded-lg border-2 border-dark-500 hover:border-accent transition-all hover:scale-105"
+                style={{ background: p.gradient || p.color }}
+                title={p.name}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Text Config Panel
+    // ========================================
+    function TextConfigPanel({ label, config, onChange }) {
+      const update = (key, val) => onChange({ ...config, [key]: val });
+      return (
+        <Section title={label}>
+          <TextInput
+            label="텍스트"
+            value={config.text}
+            onChange={v => update('text', v)}
+            placeholder="텍스트를 입력하세요..."
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <SelectInput
+              label="폰트"
+              value={config.font}
+              onChange={v => update('font', v)}
+              options={FONTS.map(f => ({ value: f.value, label: f.label }))}
+            />
+            <RangeSlider
+              label="크기"
+              value={config.fontSize}
+              onChange={v => update('fontSize', v)}
+              min={12}
+              max={120}
+              unit="px"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <ColorPicker label="텍스트 색상" value={config.color} onChange={v => update('color', v)} />
+            <ColorPicker label="외곽선 색상" value={config.strokeColor} onChange={v => update('strokeColor', v)} />
+          </div>
+          <RangeSlider
+            label="외곽선 두께"
+            value={config.strokeWidth}
+            onChange={v => update('strokeWidth', v)}
+            min={0}
+            max={20}
+            unit="px"
+          />
+          <div>
+            <Label>텍스트 정렬</Label>
+            <ToggleGroup
+              options={[
+                { value: 'left', label: '좌측' },
+                { value: 'center', label: '중앙' },
+                { value: 'right', label: '우측' },
+              ]}
+              value={config.align}
+              onChange={v => update('align', v)}
+            />
+          </div>
+          <RangeSlider
+            label="Y 위치"
+            value={config.yPosition}
+            onChange={v => update('yPosition', v)}
+            min={0}
+            max={100}
+            step={1}
+            unit="%"
+          />
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id={`bold-${label}`}
+              checked={config.bold}
+              onChange={e => update('bold', e.target.checked)}
+              className="rounded bg-dark-700 border-dark-500 text-accent focus:ring-accent"
+            />
+            <label htmlFor={`bold-${label}`} className="text-xs text-gray-400 cursor-pointer">굵게 (Bold)</label>
+            <input
+              type="checkbox"
+              id={`italic-${label}`}
+              checked={config.italic}
+              onChange={e => update('italic', e.target.checked)}
+              className="rounded bg-dark-700 border-dark-500 text-accent focus:ring-accent ml-4"
+            />
+            <label htmlFor={`italic-${label}`} className="text-xs text-gray-400 cursor-pointer">기울임 (Italic)</label>
+          </div>
+        </Section>
+      );
+    }
+
+    // ========================================
+    // Canvas Preview Component
+    // ========================================
+    function CanvasPreview({ image, topText, bottomText, canvasRef }) {
+      const containerRef = useRef(null);
+      const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+
+      const drawCanvas = useCallback(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        let w, h;
+        if (image) {
+          w = image.naturalWidth || image.width;
+          h = image.naturalHeight || image.height;
+        } else {
+          w = 800;
+          h = 600;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        setCanvasSize({ width: w, height: h });
+
+        ctx.clearRect(0, 0, w, h);
+
+        if (image) {
+          ctx.drawImage(image, 0, 0, w, h);
+        }
+
+        const drawText = (config, defaultY) => {
+          if (!config.text) return;
+          const size = config.fontSize * (Math.max(w, h) / 800);
+          const weight = config.bold ? '900' : '700';
+          const style = config.italic ? 'italic ' : '';
+          ctx.font = `${style}${weight} ${size}px "${config.font}", "Noto Sans KR", sans-serif`;
+          ctx.textBaseline = 'middle';
+
+          let x;
+          if (config.align === 'left') {
+            ctx.textAlign = 'left';
+            x = w * 0.05;
+          } else if (config.align === 'right') {
+            ctx.textAlign = 'right';
+            x = w * 0.95;
+          } else {
+            ctx.textAlign = 'center';
+            x = w / 2;
+          }
+
+          const y = h * (config.yPosition / 100);
+          const strokeW = config.strokeWidth * (Math.max(w, h) / 800);
+
+          const lines = config.text.split('\n');
+          const lineHeight = size * 1.2;
+          const totalHeight = lines.length * lineHeight;
+          const startY = y - totalHeight / 2 + lineHeight / 2;
+
+          lines.forEach((line, i) => {
+            const ly = startY + i * lineHeight;
+            if (strokeW > 0) {
+              ctx.strokeStyle = config.strokeColor;
+              ctx.lineWidth = strokeW;
+              ctx.lineJoin = 'round';
+              ctx.miterLimit = 2;
+              ctx.strokeText(line, x, ly);
+            }
+            ctx.fillStyle = config.color;
+            ctx.fillText(line, x, ly);
+          });
+        };
+
+        drawText(topText, h * 0.1);
+        drawText(bottomText, h * 0.9);
+      }, [image, topText, bottomText, canvasRef]);
+
+      useEffect(() => {
+        drawCanvas();
+      }, [drawCanvas]);
+
+      const aspectRatio = canvasSize.width / canvasSize.height;
+
+      return (
+        <div ref={containerRef} className="flex items-center justify-center bg-dark-900 rounded-xl overflow-hidden border border-dark-600" style={{ minHeight: '300px' }}>
+          <canvas
+            ref={canvasRef}
+            className="max-w-full max-h-[70vh] object-contain"
+            style={{ aspectRatio: `${aspectRatio}` }}
+          />
+        </div>
+      );
+    }
+
+    // ========================================
+    // App Component
+    // ========================================
+    function App() {
+      const canvasRef = useRef(null);
+      const [image, setImage] = useState(null);
+
+      const defaultTextConfig = (yPos) => ({
+        text: '',
+        font: 'Impact',
+        fontSize: 48,
+        color: '#ffffff',
+        strokeColor: '#000000',
+        strokeWidth: 8,
+        align: 'center',
+        yPosition: yPos,
+        bold: true,
+        italic: false,
+      });
+
+      const [topText, setTopText] = useState(defaultTextConfig(10));
+      const [bottomText, setBottomText] = useState(defaultTextConfig(90));
+
+      const handleImageLoad = useCallback((img) => {
+        setImage(img);
+      }, []);
+
+      const handlePresetSelect = useCallback((preset) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 600;
+        const ctx = canvas.getContext('2d');
+
+        if (preset.gradient) {
+          const parts = preset.gradient.match(/(\d+)deg,\s*(#\w+),\s*(#\w+)/);
+          if (parts) {
+            const angle = parseFloat(parts[1]) * Math.PI / 180;
+            const x1 = 400 + 400 * Math.cos(angle - Math.PI);
+            const y1 = 300 + 300 * Math.sin(angle - Math.PI);
+            const x2 = 400 + 400 * Math.cos(angle);
+            const y2 = 300 + 300 * Math.sin(angle);
+            const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+            grad.addColorStop(0, parts[2]);
+            grad.addColorStop(1, parts[3]);
+            ctx.fillStyle = grad;
+          }
+        } else {
+          ctx.fillStyle = preset.color;
+        }
+        ctx.fillRect(0, 0, 800, 600);
+
+        const img = new Image();
+        img.onload = () => setImage(img);
+        img.src = canvas.toDataURL();
+      }, []);
+
+      const handleDownload = useCallback(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const link = document.createElement('a');
+        link.download = `meme_${Date.now()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      }, []);
+
+      const handleReset = useCallback(() => {
+        setImage(null);
+        setTopText(defaultTextConfig(10));
+        setBottomText(defaultTextConfig(90));
+      }, []);
+
+      return (
+        <div className="min-h-screen bg-dark-900">
+          {/* Header */}
+          <header className="border-b border-dark-600 bg-dark-800/80 backdrop-blur-sm sticky top-0 z-50">
+            <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-accent rounded-lg flex items-center justify-center text-lg">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-base font-bold text-white tracking-tight">짤 생성기</h1>
+                  <p className="text-xs text-gray-500">Meme Maker</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" onClick={handleReset}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  초기화
+                </Button>
+                <Button size="sm" onClick={handleDownload} disabled={!image && !topText.text && !bottomText.text}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  PNG 다운로드
+                </Button>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Layout */}
+          <main className="max-w-7xl mx-auto px-4 py-6">
+            <div className="flex flex-col lg:flex-row gap-6">
+              {/* Sidebar Controls */}
+              <aside className="w-full lg:w-80 xl:w-96 flex-shrink-0 order-2 lg:order-1">
+                <Card>
+                  {/* Image Upload Section */}
+                  <Section title="이미지">
+                    {!image ? (
+                      <>
+                        <DropZone onImageLoad={handleImageLoad} />
+                        <TemplatePresets onSelect={handlePresetSelect} />
+                      </>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-green-400 bg-green-400/10 px-3 py-2 rounded-lg">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          이미지가 로드되었습니다
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="secondary" size="sm" className="flex-1" onClick={() => setImage(null)}>
+                            이미지 변경
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </Section>
+
+                  {/* Top Text Config */}
+                  <TextConfigPanel
+                    label="상단 텍스트"
+                    config={topText}
+                    onChange={setTopText}
+                  />
+
+                  {/* Bottom Text Config */}
+                  <TextConfigPanel
+                    label="하단 텍스트"
+                    config={bottomText}
+                    onChange={setBottomText}
+                  />
+                </Card>
+              </aside>
+
+              {/* Canvas Preview */}
+              <div className="flex-1 order-1 lg:order-2">
+                <Card className="sticky top-20">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">미리보기</h2>
+                    {image && (
+                      <span className="text-xs text-gray-500 font-mono">
+                        {canvasRef.current?.width || 0} x {canvasRef.current?.height || 0}
+                      </span>
+                    )}
+                  </div>
+                  <CanvasPreview
+                    image={image}
+                    topText={topText}
+                    bottomText={bottomText}
+                    canvasRef={canvasRef}
+                  />
+                  {!image && !topText.text && !bottomText.text && (
+                    <p className="text-center text-xs text-gray-600 mt-3">이미지를 업로드하거나 템플릿을 선택하고, 텍스트를 입력하세요</p>
+                  )}
+                </Card>
+              </div>
+            </div>
+          </main>
+
+          {/* Footer */}
+          <footer className="border-t border-dark-600 mt-12">
+            <div className="max-w-7xl mx-auto px-4 py-4 text-center text-xs text-gray-600">
+              짤 생성기 - 밈 메이커 | 이미지를 업로드하고 재미있는 밈을 만들어보세요
+            </div>
+          </footer>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
