@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>부가가치세(VAT) 세금 계산기</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            dark: {
+              900: '#0a0a0a',
+              800: '#141414',
+              700: '#1e1e1e',
+              600: '#282828',
+              500: '#333333',
+              400: '#444444',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
+    * { font-family: 'Noto Sans KR', sans-serif; }
+    body { background: #0a0a0a; }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #141414; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #444; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+    @keyframes countUp { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    .count-up { animation: countUp 0.4s ease-out; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useMemo, useCallback, useRef, useEffect } = React;
+
+    // ========================================
+    // Design System Components
+    // ========================================
+
+    function Button({ children, variant = 'primary', size = 'md', onClick, disabled = false, className = '' }) {
+      const baseClasses = 'font-medium rounded-lg transition-all duration-200 inline-flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100';
+      const variants = {
+        primary: 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30',
+        secondary: 'bg-dark-500 hover:bg-dark-400 text-gray-200 border border-gray-700',
+        danger: 'bg-red-600/80 hover:bg-red-500 text-white',
+        ghost: 'bg-transparent hover:bg-white/5 text-gray-400 hover:text-gray-200',
+      };
+      const sizes = {
+        sm: 'px-3 py-1.5 text-xs',
+        md: 'px-4 py-2 text-sm',
+        lg: 'px-6 py-3 text-base',
+      };
+      return (
+        <button onClick={onClick} disabled={disabled}
+          className={`${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`}>
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ label, value, onChange, placeholder, type = 'text', error, disabled = false, className = '', suffix, prefix }) {
+      return (
+        <div className={`flex flex-col gap-1.5 ${className}`}>
+          {label && <label className="text-xs font-medium text-gray-400 tracking-wide">{label}</label>}
+          <div className="relative flex items-center">
+            {prefix && <span className="absolute left-3 text-gray-500 text-sm pointer-events-none">{prefix}</span>}
+            <input type={type} value={value} onChange={onChange} placeholder={placeholder} disabled={disabled}
+              className={`w-full bg-dark-700 border rounded-lg px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 outline-none transition-all duration-200 focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/60 disabled:opacity-50 ${prefix ? 'pl-8' : ''} ${suffix ? 'pr-10' : ''} ${error ? 'border-red-500/60' : 'border-gray-700/60'}`} />
+            {suffix && <span className="absolute right-3 text-gray-500 text-xs pointer-events-none">{suffix}</span>}
+          </div>
+          {error && <span className="text-xs text-red-400">{error}</span>}
+        </div>
+      );
+    }
+
+    function Select({ label, value, onChange, options, className = '' }) {
+      return (
+        <div className={`flex flex-col gap-1.5 ${className}`}>
+          {label && <label className="text-xs font-medium text-gray-400 tracking-wide">{label}</label>}
+          <select value={value} onChange={onChange}
+            className="w-full bg-dark-700 border border-gray-700/60 rounded-lg px-3 py-2.5 text-sm text-gray-100 outline-none transition-all duration-200 focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/60 cursor-pointer appearance-none"
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}>
+            {options.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+
+    function Card({ children, className = '', title, subtitle, headerRight }) {
+      return (
+        <div className={`bg-dark-800 border border-gray-800/60 rounded-2xl overflow-hidden ${className}`}>
+          {(title || subtitle) && (
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800/60">
+              <div>
+                {title && <h3 className="text-base font-semibold text-gray-100">{title}</h3>}
+                {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+              </div>
+              {headerRight}
+            </div>
+          )}
+          <div className="p-6">{children}</div>
+        </div>
+      );
+    }
+
+    function Toggle({ checked, onChange, label }) {
+      return (
+        <label className="inline-flex items-center gap-3 cursor-pointer select-none">
+          <div className="relative" onClick={() => onChange(!checked)}>
+            <div className={`w-11 h-6 rounded-full transition-colors duration-200 ${checked ? 'bg-emerald-600' : 'bg-dark-500 border border-gray-700'}`} />
+            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${checked ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+          </div>
+          {label && <span className="text-sm text-gray-300">{label}</span>}
+        </label>
+      );
+    }
+
+    function Badge({ children, variant = 'default', className = '' }) {
+      const variants = {
+        default: 'bg-gray-700/50 text-gray-300',
+        success: 'bg-emerald-900/40 text-emerald-400 border border-emerald-700/30',
+        warning: 'bg-amber-900/40 text-amber-400 border border-amber-700/30',
+        danger: 'bg-red-900/40 text-red-400 border border-red-700/30',
+        info: 'bg-blue-900/40 text-blue-400 border border-blue-700/30',
+      };
+      return (
+        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${variants[variant]} ${className}`}>
+          {children}
+        </span>
+      );
+    }
+
+    // ========================================
+    // Utility Functions
+    // ========================================
+
+    function formatNumber(num) {
+      if (num === '' || num === null || num === undefined) return '';
+      return Number(num).toLocaleString('ko-KR');
+    }
+
+    function parseNumber(str) {
+      if (!str) return 0;
+      return Number(String(str).replace(/,/g, '')) || 0;
+    }
+
+    function formatBusinessNumber(value) {
+      const digits = value.replace(/\D/g, '').slice(0, 10);
+      if (digits.length <= 3) return digits;
+      if (digits.length <= 5) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+      return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+    }
+
+    const INDUSTRY_RATES = [
+      { value: 'retail', label: '소매업', rate: 15 },
+      { value: 'manufacturing', label: '제조업', rate: 20 },
+      { value: 'restaurant', label: '음식점업', rate: 25 },
+      { value: 'service', label: '서비스업', rate: 30 },
+      { value: 'construction', label: '건설업', rate: 30 },
+      { value: 'transport', label: '운수업', rate: 20 },
+      { value: 'realestate', label: '부동산임대업', rate: 40 },
+      { value: 'other', label: '기타', rate: 40 },
+    ];
+
+    // ========================================
+    // Icons (inline SVG components)
+    // ========================================
+
+    function IconPlus() {
+      return <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>;
+    }
+    function IconTrash() {
+      return <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/></svg>;
+    }
+    function IconReceipt() {
+      return <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 14l6-6M4 2v20l3-2 3 2 3-2 3 2 3-2 3 2V2l-3 2-3-2-3 2-3-2-3 2-3-2z"/><circle cx="9.5" cy="8.5" r=".5" fill="currentColor"/><circle cx="14.5" cy="13.5" r=".5" fill="currentColor"/></svg>;
+    }
+    function IconBuilding() {
+      return <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 12v.01M9 15v.01M9 18v.01"/></svg>;
+    }
+    function IconCalculator() {
+      return <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="4" y="2" width="16" height="20" rx="2"/><rect x="7" y="5" width="10" height="5" rx="1"/><path d="M7 14h.01M12 14h.01M17 14h.01M7 18h.01M12 18h.01M17 18h.01"/></svg>;
+    }
+    function IconChart() {
+      return <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>;
+    }
+    function IconReset() {
+      return <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>;
+    }
+
+    // ========================================
+    // Business Info Section
+    // ========================================
+
+    function BusinessInfoSection({ info, setInfo, isSimplified, setIsSimplified, industry, setIndustry }) {
+      const handleBizNumChange = (e) => {
+        setInfo(prev => ({ ...prev, bizNumber: formatBusinessNumber(e.target.value) }));
+      };
+
+      return (
+        <Card title="사업자 정보" subtitle="사업자 기본 정보를 입력해 주세요"
+          headerRight={<IconBuilding />}>
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input label="사업자명 (상호)" value={info.bizName}
+                onChange={e => setInfo(prev => ({ ...prev, bizName: e.target.value }))}
+                placeholder="주식회사 홍길동" />
+              <Input label="사업자등록번호" value={info.bizNumber}
+                onChange={handleBizNumChange}
+                placeholder="000-00-00000" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input label="대표자명" value={info.ceoName}
+                onChange={e => setInfo(prev => ({ ...prev, ceoName: e.target.value }))}
+                placeholder="홍길동" />
+              <Input label="업종" value={info.bizType}
+                onChange={e => setInfo(prev => ({ ...prev, bizType: e.target.value }))}
+                placeholder="도소매업" />
+            </div>
+
+            <div className="pt-3 border-t border-gray-800/60">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-400">과세자 유형</span>
+                  <div className="flex bg-dark-700 rounded-xl p-1 border border-gray-700/40">
+                    <button onClick={() => setIsSimplified(false)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${!isSimplified ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200'}`}>
+                      일반과세자
+                    </button>
+                    <button onClick={() => setIsSimplified(true)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isSimplified ? 'bg-amber-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200'}`}>
+                      간이과세자
+                    </button>
+                  </div>
+                </div>
+                {isSimplified && (
+                  <div className="fade-in flex-1 sm:max-w-[220px]">
+                    <Select label="" value={industry} onChange={e => setIndustry(e.target.value)}
+                      options={INDUSTRY_RATES.map(r => ({ value: r.value, label: `${r.label} (${r.rate}%)` }))} />
+                  </div>
+                )}
+              </div>
+              <div className="mt-3">
+                {!isSimplified ? (
+                  <Badge variant="success">일반과세자 - 부가세율 10%</Badge>
+                ) : (
+                  <Badge variant="warning">
+                    간이과세자 - 부가가치율 {INDUSTRY_RATES.find(r => r.value === industry)?.rate}%
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // Transaction Item Row
+    // ========================================
+
+    function TransactionRow({ item, onChange, onDelete, isSimplified, vatRate }) {
+      const supplyAmount = parseNumber(item.amount);
+      const taxAmount = isSimplified ? 0 : Math.round(supplyAmount * 0.1);
+      const total = supplyAmount + taxAmount;
+
+      const handleAmountChange = (e) => {
+        const raw = e.target.value.replace(/,/g, '');
+        if (raw === '' || /^\d+$/.test(raw)) {
+          onChange({ ...item, amount: raw });
+        }
+      };
+
+      return (
+        <div className="fade-in group flex items-start gap-3 bg-dark-700/50 rounded-xl p-4 border border-gray-800/40 hover:border-gray-700/60 transition-all duration-200">
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="sm:col-span-1">
+              <label className="text-[10px] text-gray-500 mb-1 block">품목명</label>
+              <input type="text" value={item.name}
+                onChange={e => onChange({ ...item, name: e.target.value })}
+                placeholder="품목명 입력"
+                className="w-full bg-dark-600 border border-gray-700/40 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 outline-none focus:ring-1 focus:ring-emerald-500/40" />
+            </div>
+            <div className="sm:col-span-1">
+              <label className="text-[10px] text-gray-500 mb-1 block">공급가액</label>
+              <div className="relative">
+                <input type="text" value={item.amount ? formatNumber(item.amount) : ''}
+                  onChange={handleAmountChange}
+                  placeholder="0"
+                  className="w-full bg-dark-600 border border-gray-700/40 rounded-lg px-3 py-2 pr-8 text-sm text-gray-100 text-right placeholder-gray-600 outline-none focus:ring-1 focus:ring-emerald-500/40 tabular-nums" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">원</span>
+              </div>
+            </div>
+            <div className="sm:col-span-1">
+              <label className="text-[10px] text-gray-500 mb-1 block">세액</label>
+              <div className="relative">
+                <input type="text" value={formatNumber(taxAmount)} readOnly
+                  className="w-full bg-dark-900/50 border border-gray-800/40 rounded-lg px-3 py-2 pr-8 text-sm text-gray-400 text-right tabular-nums cursor-default" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">원</span>
+              </div>
+            </div>
+            <div className="sm:col-span-1">
+              <label className="text-[10px] text-gray-500 mb-1 block">합계</label>
+              <div className="relative">
+                <input type="text" value={formatNumber(total)} readOnly
+                  className="w-full bg-dark-900/50 border border-gray-800/40 rounded-lg px-3 py-2 pr-8 text-sm text-emerald-400/80 text-right font-medium tabular-nums cursor-default" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">원</span>
+              </div>
+            </div>
+          </div>
+          <button onClick={onDelete}
+            className="mt-6 p-2 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-900/20 transition-all duration-200 opacity-0 group-hover:opacity-100 flex-shrink-0"
+            aria-label="항목 삭제">
+            <IconTrash />
+          </button>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Transaction List Section
+    // ========================================
+
+    function TransactionSection({ title, subtitle, type, items, setItems, isSimplified, vatRate, accentColor }) {
+      const addItem = () => {
+        setItems(prev => [...prev, { id: Date.now(), name: '', amount: '' }]);
+      };
+
+      const updateItem = (id, updated) => {
+        setItems(prev => prev.map(item => item.id === id ? { ...updated, id } : item));
+      };
+
+      const deleteItem = (id) => {
+        setItems(prev => prev.filter(item => item.id !== id));
+      };
+
+      const totalSupply = items.reduce((sum, item) => sum + parseNumber(item.amount), 0);
+      const totalTax = isSimplified ? 0 : Math.round(totalSupply * 0.1);
+
+      const colorAccent = type === 'sales'
+        ? { border: 'border-l-emerald-500', text: 'text-emerald-400', bg: 'bg-emerald-900/20' }
+        : { border: 'border-l-blue-500', text: 'text-blue-400', bg: 'bg-blue-900/20' };
+
+      return (
+        <Card className={`border-l-4 ${colorAccent.border}`}
+          title={title} subtitle={subtitle}
+          headerRight={
+            <div className="flex items-center gap-3">
+              <Badge variant={type === 'sales' ? 'success' : 'info'}>{items.length}건</Badge>
+              <Button variant="secondary" size="sm" onClick={addItem}>
+                <IconPlus /> 추가
+              </Button>
+            </div>
+          }>
+          <div className="space-y-3">
+            {items.length === 0 ? (
+              <div className="text-center py-10">
+                <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl ${colorAccent.bg} mb-3`}>
+                  <IconReceipt />
+                </div>
+                <p className="text-gray-500 text-sm">등록된 항목이 없습니다</p>
+                <p className="text-gray-600 text-xs mt-1">위의 추가 버튼을 눌러 항목을 추가해 주세요</p>
+              </div>
+            ) : (
+              <>
+                {items.map(item => (
+                  <TransactionRow key={item.id} item={item}
+                    onChange={updated => updateItem(item.id, updated)}
+                    onDelete={() => deleteItem(item.id)}
+                    isSimplified={isSimplified} vatRate={vatRate} />
+                ))}
+                <div className={`flex justify-end gap-6 pt-4 border-t border-gray-800/40 ${colorAccent.text}`}>
+                  <div className="text-right">
+                    <span className="text-[10px] text-gray-500 block">공급가액 합계</span>
+                    <span className="text-sm font-semibold tabular-nums">{formatNumber(totalSupply)}원</span>
+                  </div>
+                  {!isSimplified && (
+                    <div className="text-right">
+                      <span className="text-[10px] text-gray-500 block">세액 합계</span>
+                      <span className="text-sm font-semibold tabular-nums">{formatNumber(totalTax)}원</span>
+                    </div>
+                  )}
+                  <div className="text-right">
+                    <span className="text-[10px] text-gray-500 block">총 합계</span>
+                    <span className="text-sm font-bold tabular-nums">{formatNumber(totalSupply + totalTax)}원</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // Result Summary Section
+    // ========================================
+
+    function ResultSummary({ salesItems, purchaseItems, isSimplified, industry }) {
+      const rate = INDUSTRY_RATES.find(r => r.value === industry)?.rate || 40;
+
+      const totalSalesSupply = salesItems.reduce((sum, i) => sum + parseNumber(i.amount), 0);
+      const totalPurchaseSupply = purchaseItems.reduce((sum, i) => sum + parseNumber(i.amount), 0);
+
+      let salesTax, purchaseTax, payableTax, formulaSteps;
+
+      if (!isSimplified) {
+        salesTax = Math.round(totalSalesSupply * 0.1);
+        purchaseTax = Math.round(totalPurchaseSupply * 0.1);
+        payableTax = salesTax - purchaseTax;
+        formulaSteps = [
+          { label: '매출세액', formula: `${formatNumber(totalSalesSupply)} x 10%`, value: salesTax },
+          { label: '매입세액', formula: `${formatNumber(totalPurchaseSupply)} x 10%`, value: purchaseTax, subtract: true },
+          { label: '납부세액', formula: `${formatNumber(salesTax)} - ${formatNumber(purchaseTax)}`, value: payableTax, final: true },
+        ];
+      } else {
+        salesTax = Math.round(totalSalesSupply * (rate / 100) * 0.1);
+        const purchaseInputTax = Math.round(totalPurchaseSupply * 0.1);
+        purchaseTax = Math.round(purchaseInputTax * (rate / 100));
+        payableTax = salesTax - purchaseTax;
+        formulaSteps = [
+          { label: '매출세액', formula: `${formatNumber(totalSalesSupply)} x ${rate}% x 10%`, value: salesTax },
+          { label: '매입세액 공제', formula: `(${formatNumber(totalPurchaseSupply)} x 10%) x ${rate}%`, value: purchaseTax, subtract: true },
+          { label: '납부세액', formula: `${formatNumber(salesTax)} - ${formatNumber(purchaseTax)}`, value: payableTax, final: true },
+        ];
+      }
+
+      const isRefund = payableTax < 0;
+
+      return (
+        <Card className="border-t-4 border-t-emerald-500"
+          title="세금 계산 결과"
+          subtitle={isSimplified ? `간이과세자 (${INDUSTRY_RATES.find(r => r.value === industry)?.label} ${rate}%)` : '일반과세자 (부가세 10%)'}
+          headerRight={<IconCalculator />}>
+          <div className="space-y-4">
+            {/* Summary cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-dark-700/60 rounded-xl p-4 border border-gray-800/40">
+                <div className="text-[10px] text-gray-500 mb-1">총 매출액 (공급가액)</div>
+                <div className="text-lg font-bold text-emerald-400 tabular-nums">{formatNumber(totalSalesSupply)}원</div>
+              </div>
+              <div className="bg-dark-700/60 rounded-xl p-4 border border-gray-800/40">
+                <div className="text-[10px] text-gray-500 mb-1">총 매입액 (공급가액)</div>
+                <div className="text-lg font-bold text-blue-400 tabular-nums">{formatNumber(totalPurchaseSupply)}원</div>
+              </div>
+              <div className={`rounded-xl p-4 border ${isRefund ? 'bg-blue-900/20 border-blue-700/30' : payableTax > 0 ? 'bg-red-900/20 border-red-700/30' : 'bg-gray-800/40 border-gray-700/30'}`}>
+                <div className="text-[10px] text-gray-500 mb-1">{isRefund ? '환급받을 세액' : '납부할 세액'}</div>
+                <div className={`text-lg font-bold tabular-nums ${isRefund ? 'text-blue-400' : payableTax > 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                  {isRefund ? '-' : ''}{formatNumber(Math.abs(payableTax))}원
+                </div>
+              </div>
+            </div>
+
+            {/* Calculation breakdown */}
+            <div className="bg-dark-900/50 rounded-xl p-5 border border-gray-800/30">
+              <div className="flex items-center gap-2 mb-4">
+                <IconChart />
+                <span className="text-sm font-medium text-gray-300">계산 과정</span>
+              </div>
+              <div className="space-y-3">
+                {formulaSteps.map((step, idx) => (
+                  <div key={idx} className={`flex items-center justify-between ${step.final ? 'pt-3 border-t border-gray-700/40' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${step.final ? 'bg-emerald-600 text-white' : step.subtract ? 'bg-dark-500 text-gray-400' : 'bg-dark-500 text-gray-400'}`}>
+                        {step.final ? '=' : step.subtract ? '-' : '+'}
+                      </span>
+                      <span className={`text-sm ${step.final ? 'font-semibold text-gray-100' : 'text-gray-400'}`}>{step.label}</span>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-sm tabular-nums ${step.final ? 'font-bold text-lg' : 'font-medium'} ${step.final ? (step.value < 0 ? 'text-blue-400' : step.value > 0 ? 'text-red-400' : 'text-gray-300') : 'text-gray-300'}`}>
+                        {step.value < 0 && step.final ? '-' : ''}{formatNumber(Math.abs(step.value))}원
+                      </div>
+                      <div className="text-[10px] text-gray-600 mt-0.5">{step.formula}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Final result banner */}
+            <div className={`count-up rounded-xl p-5 text-center ${isRefund ? 'bg-gradient-to-r from-blue-900/30 to-cyan-900/30 border border-blue-700/20' : payableTax > 0 ? 'bg-gradient-to-r from-red-900/30 to-orange-900/30 border border-red-700/20' : 'bg-dark-700/40 border border-gray-700/20'}`}>
+              <div className="text-xs text-gray-400 mb-1">
+                {isRefund ? '이번 과세기간 환급받을 세액' : '이번 과세기간 납부할 세액'}
+              </div>
+              <div className={`text-3xl sm:text-4xl font-black tabular-nums tracking-tight ${isRefund ? 'text-blue-400' : payableTax > 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                {isRefund ? '- ' : ''}{formatNumber(Math.abs(payableTax))}
+                <span className="text-lg ml-1">원</span>
+              </div>
+              {isRefund && (
+                <div className="text-xs text-blue-400/70 mt-2">매입세액이 매출세액보다 많아 환급 대상입니다</div>
+              )}
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // App Component
+    // ========================================
+
+    function App() {
+      const [bizInfo, setBizInfo] = useState({
+        bizName: '', bizNumber: '', ceoName: '', bizType: ''
+      });
+      const [isSimplified, setIsSimplified] = useState(false);
+      const [industry, setIndustry] = useState('retail');
+      const [salesItems, setSalesItems] = useState([
+        { id: 1, name: '', amount: '' }
+      ]);
+      const [purchaseItems, setPurchaseItems] = useState([
+        { id: 2, name: '', amount: '' }
+      ]);
+
+      const handleReset = () => {
+        setBizInfo({ bizName: '', bizNumber: '', ceoName: '', bizType: '' });
+        setIsSimplified(false);
+        setIndustry('retail');
+        setSalesItems([{ id: Date.now(), name: '', amount: '' }]);
+        setPurchaseItems([{ id: Date.now() + 1, name: '', amount: '' }]);
+      };
+
+      return (
+        <div className="min-h-screen bg-dark-900 text-gray-100">
+          {/* Header */}
+          <header className="sticky top-0 z-50 bg-dark-900/80 backdrop-blur-xl border-b border-gray-800/40">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-900/40">
+                  <IconReceipt />
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-gray-100 leading-tight">부가가치세 계산기</h1>
+                  <p className="text-[10px] text-gray-500">VAT Calculator</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={handleReset}>
+                <IconReset /> 초기화
+              </Button>
+            </div>
+          </header>
+
+          {/* Main Content */}
+          <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6 pb-20">
+            <BusinessInfoSection
+              info={bizInfo} setInfo={setBizInfo}
+              isSimplified={isSimplified} setIsSimplified={setIsSimplified}
+              industry={industry} setIndustry={setIndustry} />
+
+            <TransactionSection
+              title="매출 내역" subtitle="매출 항목을 입력해 주세요" type="sales"
+              items={salesItems} setItems={setSalesItems}
+              isSimplified={isSimplified}
+              vatRate={isSimplified ? INDUSTRY_RATES.find(r => r.value === industry)?.rate : 10} />
+
+            <TransactionSection
+              title="매입 내역" subtitle="매입 항목을 입력해 주세요" type="purchase"
+              items={purchaseItems} setItems={setPurchaseItems}
+              isSimplified={isSimplified}
+              vatRate={isSimplified ? INDUSTRY_RATES.find(r => r.value === industry)?.rate : 10} />
+
+            <ResultSummary
+              salesItems={salesItems} purchaseItems={purchaseItems}
+              isSimplified={isSimplified} industry={industry} />
+          </main>
+
+          {/* Footer */}
+          <footer className="border-t border-gray-800/40 bg-dark-800/50">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 text-center">
+              <p className="text-xs text-gray-600">
+                본 계산기는 참고용이며, 정확한 세금 신고는 세무 전문가와 상담하시기 바랍니다.
+              </p>
+              <p className="text-[10px] text-gray-700 mt-1">
+                2026 부가가치세 계산기 | 일반과세자 / 간이과세자 지원
+              </p>
+            </div>
+          </footer>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
