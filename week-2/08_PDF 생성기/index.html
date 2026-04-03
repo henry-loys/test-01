@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF 생성기</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Noto Sans KR', sans-serif; background: #000; }
+    * { scrollbar-width: thin; scrollbar-color: #444 #1a1a1a; }
+    *::-webkit-scrollbar { width: 6px; }
+    *::-webkit-scrollbar-track { background: #1a1a1a; }
+    *::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    textarea { resize: vertical; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.25s ease-out; }
+    @keyframes spin-slow { to { transform: rotate(360deg); } }
+    .spin-slow { animation: spin-slow 1s linear infinite; }
+    .preview-page {
+      font-family: 'Noto Sans KR', sans-serif;
+      background: white;
+      color: #111;
+      box-sizing: border-box;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            dark: { 900: '#000000', 800: '#0a0a0a', 700: '#141414', 600: '#1e1e1e', 500: '#282828', 400: '#333333' },
+            accent: { DEFAULT: '#6366f1', light: '#818cf8', dark: '#4f46e5' }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-black text-gray-200 min-h-screen">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useCallback, useRef, useMemo, useEffect } = React;
+
+    // ========================================
+    // Design System Components
+    // ========================================
+
+    function Button({ children, onClick, variant = 'primary', size = 'md', disabled = false, className = '' }) {
+      const base = 'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black';
+      const variants = {
+        primary: 'bg-accent hover:bg-accent-dark text-white focus:ring-accent disabled:opacity-40',
+        secondary: 'bg-dark-400 hover:bg-dark-500 text-gray-200 border border-gray-700 focus:ring-gray-500 disabled:opacity-40',
+        danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500 disabled:opacity-40',
+        ghost: 'bg-transparent hover:bg-dark-400 text-gray-300 focus:ring-gray-500 disabled:opacity-40',
+      };
+      const sizes = { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2 text-sm', lg: 'px-6 py-3 text-base' };
+      return (
+        <button onClick={onClick} disabled={disabled}
+          className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}>
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ label, value, onChange, type = 'text', placeholder = '', className = '', ...rest }) {
+      return (
+        <div className={className}>
+          {label && <label className="block text-xs font-medium text-gray-400 mb-1.5">{label}</label>}
+          <input type={type} value={value} onChange={onChange} placeholder={placeholder}
+            className="w-full bg-dark-500 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+            {...rest} />
+        </div>
+      );
+    }
+
+    function Select({ label, value, onChange, options, className = '' }) {
+      return (
+        <div className={className}>
+          {label && <label className="block text-xs font-medium text-gray-400 mb-1.5">{label}</label>}
+          <select value={value} onChange={onChange}
+            className="w-full bg-dark-500 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors appearance-none cursor-pointer">
+            {options.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+
+    function Card({ children, className = '' }) {
+      return (
+        <div className={`bg-dark-600 border border-gray-800 rounded-xl ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    function Textarea({ label, value, onChange, placeholder = '', rows = 4, className = '' }) {
+      return (
+        <div className={className}>
+          {label && <label className="block text-xs font-medium text-gray-400 mb-1.5">{label}</label>}
+          <textarea value={value} onChange={onChange} placeholder={placeholder} rows={rows}
+            className="w-full bg-dark-500 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors leading-relaxed" />
+        </div>
+      );
+    }
+
+    // ========================================
+    // Section Component
+    // ========================================
+
+    function SectionEditor({ section, index, onUpdate, onDelete, totalCount }) {
+      const update = (field, val) => onUpdate(index, { ...section, [field]: val });
+      return (
+        <Card className="p-4 fade-in">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-md bg-accent/20 text-accent text-xs font-bold flex items-center justify-center">
+                {index + 1}
+              </span>
+              <span className="text-sm font-medium text-gray-300">섹션</span>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => onDelete(index)} disabled={totalCount <= 1}
+              className="text-gray-500 hover:text-red-400 !px-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </Button>
+          </div>
+          <Input label="섹션 제목" value={section.heading} onChange={e => update('heading', e.target.value)}
+            placeholder="소제목을 입력하세요 (선택)" className="mb-3" />
+          <Textarea label="내용" value={section.body} onChange={e => update('body', e.target.value)}
+            placeholder="내용을 입력하세요..." rows={5} />
+        </Card>
+      );
+    }
+
+    // ========================================
+    // Preview Component
+    // ========================================
+
+    function Preview({ title, author, date, sections, fontSize, textAlign, orientation, margin }) {
+      const isLandscape = orientation === 'landscape';
+      const pageW = isLandscape ? 297 : 210;
+      const pageH = isLandscape ? 210 : 297;
+      const scale = 0.75;
+      const mg = parseInt(margin);
+
+      const alignClass = { left: 'text-left', center: 'text-center', right: 'text-right' }[textAlign];
+
+      return (
+        <div className="flex justify-center overflow-auto py-4">
+          <div
+            id="pdf-preview"
+            className="preview-page shadow-2xl"
+            style={{
+              width: `${pageW * scale}mm`,
+              minHeight: `${pageH * scale}mm`,
+              padding: `${mg * scale}mm`,
+              fontSize: `${parseInt(fontSize) * scale}px`,
+              lineHeight: 1.8,
+            }}
+          >
+            {title && (
+              <h1 style={{ fontSize: `${parseInt(fontSize) * 1.6 * scale}px`, fontWeight: 700, marginBottom: `${6 * scale}mm`, color: '#111', textAlign: textAlign }}>
+                {title}
+              </h1>
+            )}
+            {(author || date) && (
+              <div style={{ fontSize: `${parseInt(fontSize) * 0.8 * scale}px`, color: '#666', marginBottom: `${8 * scale}mm`, textAlign: textAlign, display: 'flex', gap: '16px', justifyContent: textAlign === 'center' ? 'center' : textAlign === 'right' ? 'flex-end' : 'flex-start', flexWrap: 'wrap' }}>
+                {author && <span>작성자: {author}</span>}
+                {date && <span>날짜: {date}</span>}
+              </div>
+            )}
+            <hr style={{ border: 'none', borderTop: '1px solid #ddd', margin: `${4 * scale}mm 0 ${6 * scale}mm` }} />
+            {sections.map((sec, i) => (
+              <div key={i} style={{ marginBottom: `${6 * scale}mm` }}>
+                {sec.heading && (
+                  <h2 style={{ fontSize: `${parseInt(fontSize) * 1.2 * scale}px`, fontWeight: 600, marginBottom: `${3 * scale}mm`, color: '#222', textAlign: textAlign }}>
+                    {sec.heading}
+                  </h2>
+                )}
+                {sec.body && (
+                  <div style={{ whiteSpace: 'pre-wrap', textAlign: textAlign, color: '#333' }}>
+                    {sec.body}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // App Component
+    // ========================================
+
+    function App() {
+      const [title, setTitle] = useState('');
+      const [author, setAuthor] = useState('');
+      const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+      const [sections, setSections] = useState([{ heading: '', body: '' }]);
+      const [fontSize, setFontSize] = useState('14');
+      const [textAlign, setTextAlign] = useState('left');
+      const [orientation, setOrientation] = useState('portrait');
+      const [margin, setMargin] = useState('20');
+      const [generating, setGenerating] = useState(false);
+
+      const updateSection = useCallback((idx, updated) => {
+        setSections(prev => prev.map((s, i) => i === idx ? updated : s));
+      }, []);
+
+      const deleteSection = useCallback((idx) => {
+        setSections(prev => prev.filter((_, i) => i !== idx));
+      }, []);
+
+      const addSection = useCallback(() => {
+        setSections(prev => [...prev, { heading: '', body: '' }]);
+      }, []);
+
+      const generatePDF = useCallback(async () => {
+        setGenerating(true);
+        try {
+          const preview = document.getElementById('pdf-preview');
+          const isLandscape = orientation === 'landscape';
+          const pageWmm = isLandscape ? 297 : 210;
+          const pageHmm = isLandscape ? 210 : 297;
+          const scale = 0.75;
+          const dpi = 2;
+
+          const canvas = await html2canvas(preview, {
+            scale: dpi,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false,
+          });
+
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
+
+          const pdfW = pdf.internal.pageSize.getWidth();
+          const pdfH = pdf.internal.pageSize.getHeight();
+
+          const canvasWidthMM = pdfW;
+          const canvasHeightMM = (canvas.height * canvasWidthMM) / canvas.width;
+
+          if (canvasHeightMM <= pdfH) {
+            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            pdf.addImage(imgData, 'JPEG', 0, 0, canvasWidthMM, canvasHeightMM);
+          } else {
+            const pageCanvasHeight = (pdfH / canvasHeightMM) * canvas.height;
+            let yOffset = 0;
+            let page = 0;
+
+            while (yOffset < canvas.height) {
+              const sliceH = Math.min(pageCanvasHeight, canvas.height - yOffset);
+              const pageCanvas = document.createElement('canvas');
+              pageCanvas.width = canvas.width;
+              pageCanvas.height = sliceH;
+              const ctx = pageCanvas.getContext('2d');
+              ctx.drawImage(canvas, 0, yOffset, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+
+              const imgData = pageCanvas.toDataURL('image/jpeg', 0.95);
+              const sliceHmm = (sliceH * canvasWidthMM) / canvas.width;
+
+              if (page > 0) pdf.addPage();
+              pdf.addImage(imgData, 'JPEG', 0, 0, canvasWidthMM, sliceHmm);
+
+              yOffset += sliceH;
+              page++;
+            }
+          }
+
+          const fileName = title ? `${title}.pdf` : 'document.pdf';
+          pdf.save(fileName);
+        } catch (err) {
+          console.error('PDF generation error:', err);
+          alert('PDF 생성 중 오류가 발생했습니다. 다시 시도해주세요.');
+        } finally {
+          setGenerating(false);
+        }
+      }, [title, orientation]);
+
+      return (
+        <div className="min-h-screen bg-black">
+          {/* Header */}
+          <header className="border-b border-gray-800 bg-dark-800/80 backdrop-blur-sm sticky top-0 z-30">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-accent/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-white">PDF 생성기</h1>
+                  <p className="text-xs text-gray-500 hidden sm:block">문서를 작성하고 PDF로 다운로드하세요</p>
+                </div>
+              </div>
+              <Button onClick={generatePDF} disabled={generating} size="md" className="gap-2">
+                {generating ? (
+                  <>
+                    <svg className="w-4 h-4 spin-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    생성 중...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    PDF 다운로드
+                  </>
+                )}
+              </Button>
+            </div>
+          </header>
+
+          {/* Main */}
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+              {/* Left: Editor */}
+              <div className="space-y-5">
+                {/* Meta Info */}
+                <Card className="p-5">
+                  <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    문서 정보
+                  </h2>
+                  <Input label="문서 제목" value={title} onChange={e => setTitle(e.target.value)}
+                    placeholder="PDF 문서의 제목을 입력하세요" className="mb-3" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input label="작성자" value={author} onChange={e => setAuthor(e.target.value)} placeholder="이름" />
+                    <Input label="날짜" type="date" value={date} onChange={e => setDate(e.target.value)} />
+                  </div>
+                </Card>
+
+                {/* Format Options */}
+                <Card className="p-5">
+                  <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    </svg>
+                    서식 옵션
+                  </h2>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Select label="폰트 크기" value={fontSize} onChange={e => setFontSize(e.target.value)}
+                      options={[
+                        { value: '10', label: '10px - 작게' },
+                        { value: '12', label: '12px - 보통' },
+                        { value: '14', label: '14px - 기본' },
+                        { value: '16', label: '16px - 크게' },
+                        { value: '18', label: '18px - 매우 크게' },
+                        { value: '20', label: '20px - 최대' },
+                      ]} />
+                    <Select label="텍스트 정렬" value={textAlign} onChange={e => setTextAlign(e.target.value)}
+                      options={[
+                        { value: 'left', label: '좌측 정렬' },
+                        { value: 'center', label: '가운데 정렬' },
+                        { value: 'right', label: '우측 정렬' },
+                      ]} />
+                    <Select label="페이지 방향" value={orientation} onChange={e => setOrientation(e.target.value)}
+                      options={[
+                        { value: 'portrait', label: '세로 (Portrait)' },
+                        { value: 'landscape', label: '가로 (Landscape)' },
+                      ]} />
+                    <Select label="여백 (mm)" value={margin} onChange={e => setMargin(e.target.value)}
+                      options={[
+                        { value: '10', label: '10mm - 좁게' },
+                        { value: '15', label: '15mm - 보통' },
+                        { value: '20', label: '20mm - 기본' },
+                        { value: '25', label: '25mm - 넓게' },
+                        { value: '30', label: '30mm - 매우 넓게' },
+                      ]} />
+                  </div>
+                </Card>
+
+                {/* Sections */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                      </svg>
+                      본문 섹션
+                      <span className="text-xs text-gray-500 font-normal">({sections.length}개)</span>
+                    </h2>
+                    <Button variant="secondary" size="sm" onClick={addSection} className="gap-1.5">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      섹션 추가
+                    </Button>
+                  </div>
+                  <div className="space-y-3">
+                    {sections.map((sec, i) => (
+                      <SectionEditor key={i} section={sec} index={i}
+                        onUpdate={updateSection} onDelete={deleteSection} totalCount={sections.length} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Preview */}
+              <div className="lg:sticky lg:top-20 lg:self-start">
+                <Card className="overflow-hidden">
+                  <div className="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      실시간 미리보기
+                    </h2>
+                    <span className="text-xs text-gray-500">
+                      {orientation === 'portrait' ? 'A4 세로' : 'A4 가로'}
+                    </span>
+                  </div>
+                  <div className="p-4 bg-dark-700 max-h-[calc(100vh-8rem)] overflow-auto">
+                    {(!title && !author && sections.every(s => !s.heading && !s.body)) ? (
+                      <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+                        <svg className="w-12 h-12 mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p className="text-sm">왼쪽에서 내용을 입력하면</p>
+                        <p className="text-sm">미리보기가 표시됩니다</p>
+                      </div>
+                    ) : (
+                      <Preview title={title} author={author} date={date} sections={sections}
+                        fontSize={fontSize} textAlign={textAlign} orientation={orientation} margin={margin} />
+                    )}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
