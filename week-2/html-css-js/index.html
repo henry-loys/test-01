@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML 태그 예시</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- 다크모드 토글 -->
+    <button id="dark-toggle">다크모드</button>
+
+    <!-- 타이핑 애니메이션 -->
+    <div id="typing-text"><span class="cursor-blink"></span></div>
+    <br>
+
+    <!-- 제목 태그 -->
+    <h1 class="fade-in">제목1</h1>
+    <h2 class="fade-in">제목2</h2>
+    <h3 class="fade-in">제목3</h3>
+
+    <!-- 구분선 -->
+    <hr>
+
+    <!-- 카운터 -->
+    <div id="counter-section" class="fade-in">
+        <h3>카운터</h3>
+        <button class="counter-btn minus" onclick="changeCount(-1)">-</button>
+        <span id="count-display">0</span>
+        <button class="counter-btn plus" onclick="changeCount(1)">+</button>
+    </div>
+
+    <hr>
+
+    <!-- 색상 박스 -->
+    <h3 class="fade-in">클릭하면 색상이 바뀝니다</h3>
+    <div id="color-box" class="fade-in" onclick="changeColor()">클릭!</div>
+
+    <hr>
+
+    <!-- 투두 리스트 -->
+    <div id="todo-section" class="fade-in">
+        <h3>할 일 목록</h3>
+        <input type="text" id="todo-input" placeholder="할 일을 입력하세요" onkeypress="if(event.key==='Enter') addTodo()">
+        <button onclick="addTodo()">추가</button>
+        <ul id="todo-list"></ul>
+    </div>
+
+    <hr>
+
+    <!-- 문단과 텍스트 스타일 -->
+    <p class="fade-in"><b>굵은 글씨</b>입니다</p>
+    <p class="fade-in"><i>기울임</i>과 <u>밑줄</u>도 가능합니다</p>
+    <p class="fade-in"><s>취소선</s>과 <mark>형광펜</mark>도 있습니다</p>
+    <p>이것은 <small>작은 글씨</small>입니다</p>
+    <p>H<sub>2</sub>O와 E=mc<sup>2</sup></p>
+
+    <br>
+
+    <!-- 인용문 -->
+    <blockquote>
+        이것은 인용문입니다. - 누군가
+    </blockquote>
+
+    <!-- 순서 없는 목록 -->
+    <h3>좋아하는 과일</h3>
+    <ul>
+        <li>사과</li>
+        <li>바나나</li>
+        <li>포도</li>
+    </ul>
+
+    <!-- 순서 있는 목록 -->
+    <h3>요리 순서</h3>
+    <ol>
+        <li>재료를 준비한다</li>
+        <li>팬을 달군다</li>
+        <li>볶는다</li>
+    </ol>
+
+    <!-- 링크와 이미지 -->
+    <a href="https://www.google.com" target="_blank">구글로 이동</a>
+    <br><br>
+    <img src="https://via.placeholder.com/200x100" alt="샘플 이미지" width="200">
+
+    <hr>
+
+    <!-- 테이블 -->
+    <h3>시간표</h3>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>시간</th>
+                <th>월</th>
+                <th>화</th>
+                <th>수</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>09:00</td>
+                <td>국어</td>
+                <td>수학</td>
+                <td>영어</td>
+            </tr>
+            <tr>
+                <td>10:00</td>
+                <td>과학</td>
+                <td>체육</td>
+                <td>음악</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <!-- 입력 폼 -->
+    <h3>회원가입</h3>
+    <form>
+        <label for="name">이름:</label>
+        <input type="text" id="name" placeholder="이름을 입력하세요">
+        <br><br>
+
+        <label for="email">이메일:</label>
+        <input type="email" id="email" placeholder="email@example.com">
+        <br><br>
+
+        <label for="pw">비밀번호:</label>
+        <input type="password" id="pw">
+        <br><br>
+
+        <label>성별:</label>
+        <input type="radio" name="gender" id="male"><label for="male">남</label>
+        <input type="radio" name="gender" id="female"><label for="female">여</label>
+        <br><br>
+
+        <label>관심분야:</label>
+        <input type="checkbox" id="html"><label for="html">HTML</label>
+        <input type="checkbox" id="css"><label for="css">CSS</label>
+        <input type="checkbox" id="js"><label for="js">JavaScript</label>
+        <br><br>
+
+        <label for="country">국가:</label>
+        <select id="country">
+            <option>한국</option>
+            <option>미국</option>
+            <option>일본</option>
+        </select>
+        <br><br>
+
+        <label for="msg">메시지:</label><br>
+        <textarea id="msg" rows="3" cols="30" placeholder="내용을 입력하세요"></textarea>
+        <br><br>
+
+        <button type="submit">제출</button>
+        <button type="reset">초기화</button>
+    </form>
+
+    <hr>
+
+    <!-- 미디어 -->
+    <h3>영상</h3>
+    <video width="320" controls>
+        <source src="sample.mp4" type="video/mp4">
+        브라우저가 video 태그를 지원하지 않습니다.
+    </video>
+
+    <h3>오디오</h3>
+    <audio controls>
+        <source src="sample.mp3" type="audio/mpeg">
+        브라우저가 audio 태그를 지원하지 않습니다.
+    </audio>
+
+    <!-- 접기/펼치기 -->
+    <details>
+        <summary>더 보기 (클릭)</summary>
+        <p>숨겨진 내용이 여기에 표시됩니다.</p>
+    </details>
+
+    <!-- 진행 바 -->
+    <h3 class="fade-in">진행률</h3>
+    <div class="fade-in">
+        <progress id="progress-bar" value="0" max="100"></progress> <span id="progress-text">0%</span>
+    </div>
+
+    <script src="script.js"></script>
+
+</body>
+</html>

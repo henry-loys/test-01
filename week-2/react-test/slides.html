@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HTML & CSS Slide Deck</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #161616;
+      --surface-2: #222222;
+      --surface-3: #2e2e2e;
+      --text: #e8e8e8;
+      --text-secondary: #777777;
+      --accent: #5cecc6;
+      --accent-dim: rgba(92, 236, 198, 0.15);
+      --accent-glow: rgba(92, 236, 198, 0.35);
+      --radius: 20px;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== Slide Container ===== */
+    .slide-deck {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 80px;
+      opacity: 0;
+      transform: scale(0.95) translateY(20px);
+      transition: opacity 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                  transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      pointer-events: none;
+    }
+
+    .slide.active {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+      pointer-events: auto;
+    }
+
+    .slide.exit-left {
+      opacity: 0;
+      transform: scale(0.95) translateX(-40px);
+    }
+
+    .slide.exit-right {
+      opacity: 0;
+      transform: scale(0.95) translateX(40px);
+    }
+
+    /* ===== Typography ===== */
+    .slide-label {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .slide-title {
+      font-size: clamp(36px, 5vw, 64px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    .slide-subtitle {
+      font-size: clamp(16px, 2vw, 22px);
+      font-weight: 300;
+      color: var(--text-secondary);
+      text-align: center;
+      max-width: 600px;
+      line-height: 1.6;
+      margin-bottom: 48px;
+    }
+
+    .gradient-text {
+      color: var(--accent);
+      -webkit-text-fill-color: var(--accent);
+    }
+
+    /* ===== Code Block ===== */
+    .code-block {
+      background: var(--surface);
+      border: 1px solid var(--surface-2);
+      border-radius: 16px;
+      padding: 28px 32px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 15px;
+      line-height: 1.8;
+      color: var(--text-secondary);
+      max-width: 640px;
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .code-block .tag { color: #999; }
+    .code-block .attr { color: #bbb; }
+    .code-block .val { color: var(--accent); }
+    .code-block .comment { color: #555; font-style: italic; }
+    .code-block .prop { color: #ccc; }
+    .code-block .selector { color: var(--accent); }
+
+    /* ===== Demo Area ===== */
+    .demo-area {
+      background: var(--surface);
+      border: 1px solid var(--surface-2);
+      border-radius: var(--radius);
+      padding: 40px;
+      max-width: 700px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    /* Flexbox demo */
+    .demo-box {
+      width: 100px; height: 100px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+      transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      cursor: default;
+    }
+    .demo-box:hover { transform: scale(1.12) translateY(-4px); }
+    .demo-box:nth-child(1) { background: #333; }
+    .demo-box:nth-child(2) { background: #444; }
+    .demo-box:nth-child(3) { background: var(--accent); color: #0a0a0a; }
+    .demo-box:nth-child(4) { background: #555; }
+
+    /* Grid demo */
+    .demo-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      max-width: 640px;
+      width: 100%;
+    }
+    .demo-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-2);
+      border-radius: 16px;
+      padding: 24px;
+      transition: border-color 0.3s, transform 0.3s;
+      cursor: default;
+    }
+    .demo-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-4px);
+    }
+    .demo-card h4 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .demo-card p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .demo-card .card-tag {
+      display: inline-block;
+      background: var(--accent-dim);
+      color: var(--accent);
+      padding: 4px 12px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 12px;
+    }
+
+    /* Button demo */
+    .demo-btn {
+      padding: 12px 28px;
+      border: none;
+      border-radius: 100px;
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      letter-spacing: -0.01em;
+    }
+    .demo-btn:active { transform: scale(0.96); }
+    .demo-btn-primary { background: var(--accent); color: #0a0a0a; }
+    .demo-btn-primary:hover { box-shadow: 0 4px 24px var(--accent-glow); }
+    .demo-btn-green { background: #444; color: var(--text); }
+    .demo-btn-green:hover { background: #555; }
+    .demo-btn-pink { background: #333; color: var(--text); }
+    .demo-btn-pink:hover { background: #444; }
+    .demo-btn-outline {
+      background: transparent;
+      border: 2px solid #444;
+      color: var(--text);
+    }
+    .demo-btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+    .demo-btn-ghost {
+      background: rgba(255,255,255,0.06);
+      color: var(--text-secondary);
+    }
+    .demo-btn-ghost:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+
+    /* Form demo */
+    .demo-form {
+      background: var(--surface);
+      border: 1px solid var(--surface-2);
+      border-radius: var(--radius);
+      padding: 36px;
+      max-width: 400px;
+      width: 100%;
+    }
+    .demo-form label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    .demo-form input,
+    .demo-form select,
+    .demo-form textarea {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--surface-2);
+      border: 1px solid #333;
+      border-radius: 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      color: var(--text);
+      outline: none;
+      margin-bottom: 20px;
+      transition: border-color 0.2s;
+    }
+    .demo-form input:focus,
+    .demo-form select:focus,
+    .demo-form textarea:focus {
+      border-color: var(--accent);
+    }
+    .demo-form textarea { resize: vertical; min-height: 70px; }
+    .demo-form select { appearance: none; }
+    .demo-form-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #0a0a0a;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .demo-form-btn:hover { box-shadow: 0 4px 24px var(--accent-glow); }
+
+    /* Animation demo */
+    .anim-demos {
+      display: flex;
+      gap: 48px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .anim-item { text-align: center; }
+    .anim-item span {
+      display: block;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 16px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .a-bounce {
+      width: 48px; height: 48px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: a-bounce 1.2s cubic-bezier(0.36, 0, 0.66, -0.56) infinite alternate;
+    }
+    @keyframes a-bounce {
+      to { transform: translateY(-32px); }
+    }
+    .a-spin {
+      width: 48px; height: 48px;
+      border: 3px solid var(--surface-2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: a-spin 0.8s linear infinite;
+    }
+    @keyframes a-spin { to { transform: rotate(360deg); } }
+    .a-pulse {
+      width: 48px; height: 48px;
+      background: #555;
+      border-radius: 50%;
+      animation: a-pulse 2s ease-in-out infinite;
+    }
+    @keyframes a-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.35); opacity: 0.5; }
+    }
+    .a-slide-track {
+      width: 160px;
+      background: var(--surface-2);
+      border-radius: 10px;
+      padding: 6px;
+    }
+    .a-slide {
+      width: 36px; height: 36px;
+      background: #666;
+      border-radius: 8px;
+      animation: a-slide 2s ease-in-out infinite alternate;
+    }
+    @keyframes a-slide {
+      from { transform: translateX(0); }
+      to { transform: translateX(118px); }
+    }
+    .a-gradient {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, #555, var(--accent), #555);
+      background-size: 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: a-gradient 3s ease infinite;
+    }
+    @keyframes a-gradient {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    /* ===== Navigation ===== */
+    .nav-bar {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(28, 28, 30, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--surface-2);
+      border-radius: 100px;
+      padding: 10px 20px;
+      z-index: 100;
+    }
+
+    .nav-btn {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .nav-btn:hover { background: #3a3a3a; }
+    .nav-btn:disabled { opacity: 0.3; cursor: default; }
+    .nav-btn:disabled:hover { background: var(--surface-2); }
+
+    .nav-dots {
+      display: flex;
+      gap: 8px;
+      padding: 0 8px;
+    }
+    .nav-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--surface-2);
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s;
+      padding: 0;
+    }
+    .nav-dot.active {
+      background: var(--accent);
+      width: 24px;
+      border-radius: 4px;
+    }
+
+    .nav-counter {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      min-width: 44px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ===== Keyboard Hint ===== */
+    .key-hint {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: var(--text-secondary);
+      font-size: 12px;
+      opacity: 0.5;
+      transition: opacity 0.3s;
+    }
+    .key-hint:hover { opacity: 1; }
+    .key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px; height: 28px;
+      background: var(--surface);
+      border: 1px solid var(--surface-2);
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    /* ===== Progress Bar ===== */
+    .progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: var(--accent);
+      transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      z-index: 100;
+    }
+
+    /* ===== Slide Background Image ===== */
+    .slide-bg {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      overflow: hidden;
+    }
+    .slide-bg img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.12;
+      filter: blur(10px) grayscale(1);
+    }
+    .slide-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.9) 100%);
+    }
+
+    /* Code slide image thumbnail */
+    .code-slide-img {
+      width: 100%;
+      max-width: 640px;
+      height: 140px;
+      border-radius: 16px;
+      object-fit: cover;
+      margin-bottom: 24px;
+      opacity: 0.5;
+      filter: grayscale(1);
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 768px) {
+      .slide { padding: 40px 24px; }
+      .demo-grid { grid-template-columns: 1fr; }
+      .anim-demos { gap: 32px; }
+      .key-hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Progress Bar -->
+  <div class="progress-bar" id="progress"></div>
+
+  <!-- Keyboard Hint -->
+  <div class="key-hint">
+    <span class="key">&larr;</span>
+    <span class="key">&rarr;</span>
+    <span>or Space</span>
+  </div>
+
+  <!-- Slides -->
+  <div class="slide-deck" id="deck">
+
+    <!-- Slide 0: Title -->
+    <div class="slide active">
+      <div class="slide-bg"><img src="images/00-title.png" alt=""></div>
+      <p class="slide-label">Week 2 &middot; React Test</p>
+      <h1 class="slide-title">HTML Tags &<br><span class="gradient-text">CSS Styles</span></h1>
+      <p class="slide-subtitle">5가지 핵심 HTML/CSS 패턴을 소개합니다</p>
+    </div>
+
+    <!-- Slide 1: Flexbox -->
+    <div class="slide">
+      <div class="slide-bg"><img src="images/01-flexbox.png" alt=""></div>
+      <p class="slide-label">01 &mdash; Layout</p>
+      <h2 class="slide-title">Flexbox</h2>
+      <p class="slide-subtitle">유연한 1차원 레이아웃. <code>display: flex</code>로 자식 요소를 가로/세로로 자유롭게 배치합니다.</p>
+      <div class="demo-area">
+        <div class="demo-box">div</div>
+        <div class="demo-box">div</div>
+        <div class="demo-box">div</div>
+        <div class="demo-box">div</div>
+      </div>
+    </div>
+
+    <!-- Slide 2: Flexbox Code -->
+    <div class="slide">
+      <p class="slide-label">01 &mdash; Layout</p>
+      <h2 class="slide-title" style="font-size:clamp(28px,4vw,48px)">Flexbox Code</h2>
+      <p class="slide-subtitle">핵심 CSS 속성 3가지만 기억하세요</p>
+      <img class="code-slide-img" src="images/01-flexbox.png" alt="">
+      <div class="code-block">
+        <span class="comment">/* 부모 컨테이너 */</span><br>
+        <span class="selector">.container</span> {<br>
+        &nbsp;&nbsp;<span class="prop">display</span>: <span class="val">flex</span>;<br>
+        &nbsp;&nbsp;<span class="prop">gap</span>: <span class="val">16px</span>;<br>
+        &nbsp;&nbsp;<span class="prop">justify-content</span>: <span class="val">center</span>;<br>
+        &nbsp;&nbsp;<span class="prop">flex-wrap</span>: <span class="val">wrap</span>;<br>
+        }<br><br>
+        <span class="comment">/* 자식 요소 */</span><br>
+        <span class="selector">.box</span> {<br>
+        &nbsp;&nbsp;<span class="prop">width</span>: <span class="val">140px</span>;<br>
+        &nbsp;&nbsp;<span class="prop">height</span>: <span class="val">140px</span>;<br>
+        &nbsp;&nbsp;<span class="prop">border-radius</span>: <span class="val">12px</span>;<br>
+        }
+      </div>
+    </div>
+
+    <!-- Slide 3: Grid -->
+    <div class="slide">
+      <div class="slide-bg"><img src="images/02-grid.png" alt=""></div>
+      <p class="slide-label">02 &mdash; Layout</p>
+      <h2 class="slide-title">CSS Grid</h2>
+      <p class="slide-subtitle">2차원 레이아웃 시스템. 카드 UI에 최적화된 반응형 그리드를 만듭니다.</p>
+      <div class="demo-grid">
+        <div class="demo-card">
+          <h4>HTML</h4>
+          <p>웹 페이지의 구조를 정의하는 마크업 언어</p>
+          <span class="card-tag">기초</span>
+        </div>
+        <div class="demo-card">
+          <h4>CSS</h4>
+          <p>스타일과 레이아웃을 담당하는 스타일시트</p>
+          <span class="card-tag">스타일</span>
+        </div>
+        <div class="demo-card">
+          <h4>JavaScript</h4>
+          <p>동적인 기능을 추가하는 프로그래밍 언어</p>
+          <span class="card-tag">로직</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 4: Grid Code -->
+    <div class="slide">
+      <p class="slide-label">02 &mdash; Layout</p>
+      <h2 class="slide-title" style="font-size:clamp(28px,4vw,48px)">Grid Code</h2>
+      <p class="slide-subtitle">auto-fit + minmax로 반응형 그리드 완성</p>
+      <img class="code-slide-img" src="images/02-grid.png" alt="">
+      <div class="code-block">
+        <span class="selector">.grid</span> {<br>
+        &nbsp;&nbsp;<span class="prop">display</span>: <span class="val">grid</span>;<br>
+        &nbsp;&nbsp;<span class="prop">grid-template-columns</span>:<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="val">repeat(auto-fit, minmax(200px, 1fr))</span>;<br>
+        &nbsp;&nbsp;<span class="prop">gap</span>: <span class="val">20px</span>;<br>
+        }<br><br>
+        <span class="selector">.card</span> {<br>
+        &nbsp;&nbsp;<span class="prop">border-radius</span>: <span class="val">16px</span>;<br>
+        &nbsp;&nbsp;<span class="prop">padding</span>: <span class="val">24px</span>;<br>
+        &nbsp;&nbsp;<span class="prop">border</span>: <span class="val">1px solid #ccc</span>;<br>
+        &nbsp;&nbsp;<span class="prop">transition</span>: <span class="val">border-color 0.3s</span>;<br>
+        }
+      </div>
+    </div>
+
+    <!-- Slide 5: Buttons -->
+    <div class="slide">
+      <div class="slide-bg"><img src="images/03-buttons.png" alt=""></div>
+      <p class="slide-label">03 &mdash; Components</p>
+      <h2 class="slide-title">Buttons</h2>
+      <p class="slide-subtitle">다양한 variant로 UI 의도를 전달합니다</p>
+      <div class="demo-area" style="flex-direction:column;gap:20px">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+          <button class="demo-btn demo-btn-primary">Primary</button>
+          <button class="demo-btn demo-btn-green">Success</button>
+          <button class="demo-btn demo-btn-pink">Danger</button>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+          <button class="demo-btn demo-btn-outline">Outline</button>
+          <button class="demo-btn demo-btn-ghost">Ghost</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 6: Buttons Code -->
+    <div class="slide">
+      <p class="slide-label">03 &mdash; Components</p>
+      <h2 class="slide-title" style="font-size:clamp(28px,4vw,48px)">Button Code</h2>
+      <p class="slide-subtitle">border-radius: 100px으로 pill 모양 완성</p>
+      <img class="code-slide-img" src="images/03-buttons.png" alt="">
+      <div class="code-block">
+        <span class="selector">button</span> {<br>
+        &nbsp;&nbsp;<span class="prop">padding</span>: <span class="val">12px 28px</span>;<br>
+        &nbsp;&nbsp;<span class="prop">border</span>: <span class="val">none</span>;<br>
+        &nbsp;&nbsp;<span class="prop">border-radius</span>: <span class="val">100px</span>;<br>
+        &nbsp;&nbsp;<span class="prop">font-weight</span>: <span class="val">600</span>;<br>
+        &nbsp;&nbsp;<span class="prop">cursor</span>: <span class="val">pointer</span>;<br>
+        &nbsp;&nbsp;<span class="prop">transition</span>: <span class="val">all 0.25s</span>;<br>
+        }<br><br>
+        <span class="selector">.primary</span> { <span class="prop">background</span>: <span class="val">#2997ff</span>; }<br>
+        <span class="selector">.outline</span> { <span class="prop">border</span>: <span class="val">2px solid #444</span>; }<br>
+        <span class="selector">.ghost</span>&nbsp;&nbsp; { <span class="prop">background</span>: <span class="val">rgba(255,255,255,0.08)</span>; }
+      </div>
+    </div>
+
+    <!-- Slide 7: Form -->
+    <div class="slide">
+      <div class="slide-bg"><img src="images/04-form.png" alt=""></div>
+      <p class="slide-label">04 &mdash; Components</p>
+      <h2 class="slide-title">Form</h2>
+      <p class="slide-subtitle">input, select, textarea를 활용한 폼 스타일링</p>
+      <div class="demo-form">
+        <label>이름</label>
+        <input type="text" placeholder="홍길동">
+        <label>이메일</label>
+        <input type="email" placeholder="example@email.com">
+        <label>직업</label>
+        <select>
+          <option>선택하세요</option>
+          <option>개발자</option>
+          <option>디자이너</option>
+        </select>
+        <button type="button" class="demo-form-btn">가입하기</button>
+      </div>
+    </div>
+
+    <!-- Slide 8: Form Code -->
+    <div class="slide">
+      <p class="slide-label">04 &mdash; Components</p>
+      <h2 class="slide-title" style="font-size:clamp(28px,4vw,48px)">Form Code</h2>
+      <p class="slide-subtitle">:focus 상태의 border-color로 인터랙션 피드백</p>
+      <img class="code-slide-img" src="images/04-form.png" alt="">
+      <div class="code-block">
+        <span class="selector">input</span>, <span class="selector">select</span> {<br>
+        &nbsp;&nbsp;<span class="prop">width</span>: <span class="val">100%</span>;<br>
+        &nbsp;&nbsp;<span class="prop">padding</span>: <span class="val">12px 16px</span>;<br>
+        &nbsp;&nbsp;<span class="prop">background</span>: <span class="val">#2c2c2e</span>;<br>
+        &nbsp;&nbsp;<span class="prop">border</span>: <span class="val">1px solid #3a3a3c</span>;<br>
+        &nbsp;&nbsp;<span class="prop">border-radius</span>: <span class="val">12px</span>;<br>
+        &nbsp;&nbsp;<span class="prop">outline</span>: <span class="val">none</span>;<br>
+        &nbsp;&nbsp;<span class="prop">transition</span>: <span class="val">border-color 0.2s</span>;<br>
+        }<br><br>
+        <span class="selector">input:focus</span> {<br>
+        &nbsp;&nbsp;<span class="prop">border-color</span>: <span class="val">#2997ff</span>;<br>
+        }
+      </div>
+    </div>
+
+    <!-- Slide 9: Animation -->
+    <div class="slide">
+      <div class="slide-bg"><img src="images/05-animation.png" alt=""></div>
+      <p class="slide-label">05 &mdash; Motion</p>
+      <h2 class="slide-title">CSS Animation</h2>
+      <p class="slide-subtitle">@keyframes로 생동감 있는 UI를 만듭니다</p>
+      <div class="anim-demos">
+        <div class="anim-item">
+          <div class="a-bounce"></div>
+          <span>Bounce</span>
+        </div>
+        <div class="anim-item">
+          <div class="a-spin"></div>
+          <span>Spin</span>
+        </div>
+        <div class="anim-item">
+          <div class="a-pulse"></div>
+          <span>Pulse</span>
+        </div>
+        <div class="anim-item">
+          <div class="a-slide-track">
+            <div class="a-slide"></div>
+          </div>
+          <span>Slide</span>
+        </div>
+        <div class="anim-item">
+          <p class="a-gradient">Hello!</p>
+          <span>Gradient</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 10: Animation Code -->
+    <div class="slide">
+      <p class="slide-label">05 &mdash; Motion</p>
+      <h2 class="slide-title" style="font-size:clamp(28px,4vw,48px)">Animation Code</h2>
+      <p class="slide-subtitle">animation 속성 하나로 무한 반복 모션</p>
+      <img class="code-slide-img" src="images/05-animation.png" alt="">
+      <div class="code-block">
+        <span class="selector">.bounce</span> {<br>
+        &nbsp;&nbsp;<span class="prop">animation</span>: <span class="val">bounce 1s infinite</span>;<br>
+        }<br><br>
+        <span class="selector">@keyframes</span> <span class="val">bounce</span> {<br>
+        &nbsp;&nbsp;0%, 100% { <span class="prop">transform</span>: <span class="val">translateY(0)</span>; }<br>
+        &nbsp;&nbsp;50%&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; { <span class="prop">transform</span>: <span class="val">translateY(-30px)</span>; }<br>
+        }<br><br>
+        <span class="selector">.gradient-text</span> {<br>
+        &nbsp;&nbsp;<span class="prop">background</span>: <span class="val">linear-gradient(90deg, pink, blue)</span>;<br>
+        &nbsp;&nbsp;<span class="prop">background-size</span>: <span class="val">200%</span>;<br>
+        &nbsp;&nbsp;<span class="prop">-webkit-background-clip</span>: <span class="val">text</span>;<br>
+        &nbsp;&nbsp;<span class="prop">animation</span>: <span class="val">gradient 3s ease infinite</span>;<br>
+        }
+      </div>
+    </div>
+
+    <!-- Slide 11: Outro -->
+    <div class="slide">
+      <div class="slide-bg"><img src="images/06-summary.png" alt=""></div>
+      <p class="slide-label">Summary</p>
+      <h2 class="slide-title" style="font-size:clamp(28px,4vw,48px)">5가지를 배웠습니다</h2>
+      <p class="slide-subtitle" style="max-width:500px">
+        Flexbox &middot; Grid &middot; Button &middot; Form &middot; Animation<br>
+        이 패턴만으로도 대부분의 UI를 구성할 수 있습니다.
+      </p>
+    </div>
+
+  </div>
+
+  <!-- Navigation -->
+  <nav class="nav-bar">
+    <button class="nav-btn" id="prevBtn" aria-label="Previous slide">&larr;</button>
+    <div class="nav-dots" id="dots"></div>
+    <button class="nav-btn" id="nextBtn" aria-label="Next slide">&rarr;</button>
+    <span class="nav-counter" id="counter"></span>
+  </nav>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    const dots = document.getElementById('dots');
+    const counter = document.getElementById('counter');
+    const progress = document.getElementById('progress');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const total = slides.length;
+    let current = 0;
+
+    // Build dots
+    slides.forEach((_, i) => {
+      const dot = document.createElement('button');
+      dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+      dot.setAttribute('aria-label', `Slide ${i + 1}`);
+      dot.addEventListener('click', () => goTo(i));
+      dots.appendChild(dot);
+    });
+
+    function goTo(index, direction) {
+      if (index < 0 || index >= total || index === current) return;
+      const dir = direction || (index > current ? 'left' : 'right');
+      slides[current].classList.remove('active');
+      slides[current].classList.add(dir === 'left' ? 'exit-left' : 'exit-right');
+      setTimeout(() => {
+        slides[current].classList.remove('exit-left', 'exit-right');
+        current = index;
+        slides[current].classList.add('active');
+        updateUI();
+      }, 100);
+    }
+
+    function updateUI() {
+      // dots
+      dots.querySelectorAll('.nav-dot').forEach((d, i) => {
+        d.classList.toggle('active', i === current);
+      });
+      // counter
+      counter.textContent = `${current + 1} / ${total}`;
+      // progress
+      progress.style.width = `${((current + 1) / total) * 100}%`;
+      // buttons
+      prevBtn.disabled = current === 0;
+      nextBtn.disabled = current === total - 1;
+    }
+
+    function next() { goTo(current + 1, 'left'); }
+    function prev() { goTo(current - 1, 'right'); }
+
+    prevBtn.addEventListener('click', prev);
+    nextBtn.addEventListener('click', next);
+
+    document.addEventListener('keydown', (e) => {
+      // Ignore when typing in form inputs
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+      if (e.key === 'Home') { e.preventDefault(); goTo(0); }
+      if (e.key === 'End') { e.preventDefault(); goTo(total - 1); }
+    });
+
+    updateUI();
+  </script>
+
+</body>
+</html>

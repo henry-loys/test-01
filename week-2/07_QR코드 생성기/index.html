@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QR 코드 생성기</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body { background: #000; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #555; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+    #qr-canvas img, #qr-canvas canvas {
+      display: block !important;
+      margin: 0 auto;
+      border-radius: 8px;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            dark: { 900: '#0a0a0a', 800: '#111111', 700: '#1a1a1a', 600: '#222222', 500: '#2a2a2a' },
+            accent: { DEFAULT: '#6366f1', hover: '#818cf8', dim: '#4f46e5' }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // React Hooks Destructuring
+    // ========================================
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+    // ========================================
+    // Constants
+    // ========================================
+    const INPUT_TYPES = [
+      { id: 'url', label: 'URL', icon: '🔗', placeholder: 'https://example.com' },
+      { id: 'text', label: '텍스트', icon: '📝', placeholder: '변환할 텍스트를 입력하세요' },
+      { id: 'phone', label: '전화번호', icon: '📞', placeholder: '010-1234-5678' },
+      { id: 'email', label: '이메일', icon: '✉️', placeholder: 'user@example.com' },
+      { id: 'wifi', label: 'Wi-Fi', icon: '📶', placeholder: '' },
+    ];
+
+    const SIZE_OPTIONS = [
+      { value: 128, label: '128px' },
+      { value: 256, label: '256px' },
+      { value: 512, label: '512px' },
+    ];
+
+    const ERROR_LEVELS = [
+      { value: 'L', label: 'L (7%)', desc: '낮음' },
+      { value: 'M', label: 'M (15%)', desc: '보통' },
+      { value: 'Q', label: 'Q (25%)', desc: '높음' },
+      { value: 'H', label: 'H (30%)', desc: '최고' },
+    ];
+
+    const HISTORY_KEY = 'qr-generator-history';
+
+    // ========================================
+    // Utility Functions
+    // ========================================
+    function formatQRData(type, data) {
+      switch (type) {
+        case 'phone':
+          return `tel:${data.phone || ''}`;
+        case 'email':
+          return `mailto:${data.email || ''}`;
+        case 'wifi':
+          return `WIFI:T:${data.encryption || 'WPA'};S:${data.ssid || ''};P:${data.password || ''};;`;
+        case 'url':
+        case 'text':
+        default:
+          return data.text || '';
+      }
+    }
+
+    function loadHistory() {
+      try {
+        return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+      } catch { return []; }
+    }
+
+    function saveHistory(history) {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 20)));
+    }
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+    function Card({ children, className = '' }) {
+      return (
+        <div className={`bg-dark-700 border border-dark-500 rounded-2xl p-6 ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    function Button({ children, variant = 'primary', size = 'md', onClick, disabled, className = '' }) {
+      const base = 'font-medium rounded-xl transition-all duration-200 inline-flex items-center justify-center gap-2 cursor-pointer';
+      const variants = {
+        primary: 'bg-accent hover:bg-accent-hover text-white shadow-lg shadow-accent/20 hover:shadow-accent/30',
+        secondary: 'bg-dark-600 hover:bg-dark-500 text-gray-300 border border-dark-500',
+        danger: 'bg-red-600 hover:bg-red-500 text-white',
+        ghost: 'bg-transparent hover:bg-dark-600 text-gray-400 hover:text-gray-200',
+      };
+      const sizes = {
+        sm: 'px-3 py-1.5 text-sm',
+        md: 'px-5 py-2.5 text-sm',
+        lg: 'px-6 py-3 text-base',
+      };
+      return (
+        <button
+          onClick={onClick}
+          disabled={disabled}
+          className={`${base} ${variants[variant]} ${sizes[size]} ${disabled ? 'opacity-40 cursor-not-allowed' : ''} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ label, value, onChange, placeholder, type = 'text', className = '' }) {
+      return (
+        <div className={className}>
+          {label && <label className="block text-sm text-gray-400 mb-1.5 font-medium">{label}</label>}
+          <input
+            type={type}
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="w-full bg-dark-800 border border-dark-500 rounded-xl px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all"
+          />
+        </div>
+      );
+    }
+
+    function Select({ label, value, onChange, options, className = '' }) {
+      return (
+        <div className={className}>
+          {label && <label className="block text-sm text-gray-400 mb-1.5 font-medium">{label}</label>}
+          <select
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className="w-full bg-dark-800 border border-dark-500 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all cursor-pointer"
+          >
+            {options.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+
+    function ColorPicker({ label, value, onChange }) {
+      return (
+        <div>
+          <label className="block text-sm text-gray-400 mb-1.5 font-medium">{label}</label>
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              value={value}
+              onChange={e => onChange(e.target.value)}
+              className="w-10 h-10 rounded-lg border border-dark-500 cursor-pointer bg-transparent"
+            />
+            <input
+              type="text"
+              value={value}
+              onChange={e => onChange(e.target.value)}
+              className="flex-1 bg-dark-800 border border-dark-500 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-accent transition-all"
+            />
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🧩 Input Type Components
+    // ========================================
+    function URLInput({ data, setData }) {
+      return (
+        <Input
+          label="URL 주소"
+          value={data.text || ''}
+          onChange={v => setData({ ...data, text: v })}
+          placeholder="https://example.com"
+        />
+      );
+    }
+
+    function TextInput({ data, setData }) {
+      return (
+        <div>
+          <label className="block text-sm text-gray-400 mb-1.5 font-medium">텍스트</label>
+          <textarea
+            value={data.text || ''}
+            onChange={e => setData({ ...data, text: e.target.value })}
+            placeholder="변환할 텍스트를 입력하세요"
+            rows={3}
+            className="w-full bg-dark-800 border border-dark-500 rounded-xl px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all resize-none"
+          />
+        </div>
+      );
+    }
+
+    function PhoneInput({ data, setData }) {
+      return (
+        <Input
+          label="전화번호"
+          value={data.phone || ''}
+          onChange={v => setData({ ...data, phone: v })}
+          placeholder="010-1234-5678"
+          type="tel"
+        />
+      );
+    }
+
+    function EmailInput({ data, setData }) {
+      return (
+        <Input
+          label="이메일 주소"
+          value={data.email || ''}
+          onChange={v => setData({ ...data, email: v })}
+          placeholder="user@example.com"
+          type="email"
+        />
+      );
+    }
+
+    function WifiInput({ data, setData }) {
+      return (
+        <div className="space-y-3">
+          <Input
+            label="네트워크 이름 (SSID)"
+            value={data.ssid || ''}
+            onChange={v => setData({ ...data, ssid: v })}
+            placeholder="MyWiFi"
+          />
+          <Input
+            label="비밀번호"
+            value={data.password || ''}
+            onChange={v => setData({ ...data, password: v })}
+            placeholder="비밀번호 입력"
+            type="password"
+          />
+          <Select
+            label="암호화 방식"
+            value={data.encryption || 'WPA'}
+            onChange={v => setData({ ...data, encryption: v })}
+            options={[
+              { value: 'WPA', label: 'WPA/WPA2' },
+              { value: 'WEP', label: 'WEP' },
+              { value: 'nopass', label: '없음 (개방형)' },
+            ]}
+          />
+        </div>
+      );
+    }
+
+    const INPUT_COMPONENTS = {
+      url: URLInput,
+      text: TextInput,
+      phone: PhoneInput,
+      email: EmailInput,
+      wifi: WifiInput,
+    };
+
+    // ========================================
+    // 📄 QR Code Preview Component
+    // ========================================
+    function QRPreview({ qrData, size, fgColor, bgColor, errorLevel }) {
+      const qrRef = useRef(null);
+      const qrInstance = useRef(null);
+
+      useEffect(() => {
+        if (!qrRef.current) return;
+
+        // Clear previous
+        qrRef.current.innerHTML = '';
+        qrInstance.current = null;
+
+        if (!qrData || qrData.trim() === '') return;
+
+        try {
+          const levelMap = { L: QRCode.CorrectLevel.L, M: QRCode.CorrectLevel.M, Q: QRCode.CorrectLevel.Q, H: QRCode.CorrectLevel.H };
+          qrInstance.current = new QRCode(qrRef.current, {
+            text: qrData,
+            width: size,
+            height: size,
+            colorDark: fgColor,
+            colorLight: bgColor,
+            correctLevel: levelMap[errorLevel] || QRCode.CorrectLevel.M,
+          });
+        } catch (err) {
+          qrRef.current.innerHTML = '<p class="text-red-400 text-sm">QR 코드 생성 실패</p>';
+        }
+      }, [qrData, size, fgColor, bgColor, errorLevel]);
+
+      return <div id="qr-canvas" ref={qrRef} className="flex items-center justify-center min-h-[128px]" />;
+    }
+
+    // ========================================
+    // 📄 History Panel Component
+    // ========================================
+    function HistoryPanel({ history, onSelect, onDelete, onClearAll }) {
+      if (history.length === 0) {
+        return (
+          <Card>
+            <h3 className="text-lg font-bold text-white mb-4">최근 생성 히스토리</h3>
+            <div className="text-center py-8">
+              <p className="text-gray-500 text-4xl mb-3">📋</p>
+              <p className="text-gray-500 text-sm">아직 생성한 QR 코드가 없습니다</p>
+            </div>
+          </Card>
+        );
+      }
+
+      return (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-white">최근 생성 히스토리</h3>
+            <Button variant="ghost" size="sm" onClick={onClearAll}>전체 삭제</Button>
+          </div>
+          <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+            {history.map((item, i) => {
+              const typeInfo = INPUT_TYPES.find(t => t.id === item.type) || INPUT_TYPES[0];
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-3 bg-dark-800 rounded-xl px-4 py-3 hover:bg-dark-600 transition-colors group cursor-pointer"
+                  onClick={() => onSelect(item)}
+                >
+                  <span className="text-lg flex-shrink-0">{typeInfo.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white truncate">{item.display}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {new Date(item.createdAt).toLocaleString('ko-KR')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); onDelete(item.id); }}
+                    className="text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                    aria-label="삭제"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 🚀 App Component
+    // ========================================
+    function App() {
+      const [inputType, setInputType] = useState('url');
+      const [inputData, setInputData] = useState({ text: '' });
+      const [size, setSize] = useState(256);
+      const [fgColor, setFgColor] = useState('#000000');
+      const [bgColor, setBgColor] = useState('#ffffff');
+      const [errorLevel, setErrorLevel] = useState('M');
+      const [history, setHistory] = useState(loadHistory);
+      const [showOptions, setShowOptions] = useState(false);
+      const [toast, setToast] = useState(null);
+
+      const qrData = useMemo(() => formatQRData(inputType, inputData), [inputType, inputData]);
+
+      const showToast = useCallback((msg) => {
+        setToast(msg);
+        setTimeout(() => setToast(null), 2500);
+      }, []);
+
+      // Reset input data when type changes
+      const handleTypeChange = useCallback((type) => {
+        setInputType(type);
+        setInputData(type === 'wifi' ? { ssid: '', password: '', encryption: 'WPA' } : { text: '' });
+      }, []);
+
+      // Add to history
+      const handleAddHistory = useCallback(() => {
+        if (!qrData || qrData.trim() === '') return;
+
+        const display = inputType === 'wifi'
+          ? `Wi-Fi: ${inputData.ssid || '(이름 없음)'}`
+          : qrData;
+
+        const entry = {
+          id: Date.now(),
+          type: inputType,
+          data: { ...inputData },
+          display,
+          qrData,
+          size,
+          fgColor,
+          bgColor,
+          errorLevel,
+          createdAt: new Date().toISOString(),
+        };
+
+        const updated = [entry, ...history.filter(h => h.qrData !== qrData)].slice(0, 20);
+        setHistory(updated);
+        saveHistory(updated);
+        showToast('히스토리에 저장되었습니다');
+      }, [qrData, inputType, inputData, size, fgColor, bgColor, errorLevel, history, showToast]);
+
+      // Select from history
+      const handleSelectHistory = useCallback((item) => {
+        setInputType(item.type);
+        setInputData(item.data);
+        if (item.size) setSize(item.size);
+        if (item.fgColor) setFgColor(item.fgColor);
+        if (item.bgColor) setBgColor(item.bgColor);
+        if (item.errorLevel) setErrorLevel(item.errorLevel);
+        showToast('히스토리에서 불러왔습니다');
+      }, [showToast]);
+
+      // Delete from history
+      const handleDeleteHistory = useCallback((id) => {
+        const updated = history.filter(h => h.id !== id);
+        setHistory(updated);
+        saveHistory(updated);
+      }, [history]);
+
+      // Clear all history
+      const handleClearHistory = useCallback(() => {
+        setHistory([]);
+        saveHistory([]);
+        showToast('히스토리가 모두 삭제되었습니다');
+      }, [showToast]);
+
+      // Download QR code
+      const handleDownload = useCallback(() => {
+        const canvas = document.querySelector('#qr-canvas canvas');
+        const img = document.querySelector('#qr-canvas img');
+
+        if (canvas) {
+          const link = document.createElement('a');
+          link.download = `qrcode-${Date.now()}.png`;
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+          showToast('QR 코드가 다운로드되었습니다');
+        } else if (img) {
+          const link = document.createElement('a');
+          link.download = `qrcode-${Date.now()}.png`;
+          link.href = img.src;
+          link.click();
+          showToast('QR 코드가 다운로드되었습니다');
+        }
+      }, [showToast]);
+
+      const InputComponent = INPUT_COMPONENTS[inputType];
+      const hasData = qrData && qrData.trim() !== '' && qrData !== 'tel:' && qrData !== 'mailto:' && qrData !== 'WIFI:T:WPA;S:;P:;;';
+
+      return (
+        <div className="min-h-screen bg-black text-white">
+          {/* Toast */}
+          {toast && (
+            <div className="fixed top-6 right-6 z-50 fade-in">
+              <div className="bg-dark-600 border border-dark-500 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium">
+                {toast}
+              </div>
+            </div>
+          )}
+
+          {/* Header */}
+          <header className="border-b border-dark-700">
+            <div className="max-w-6xl mx-auto px-4 py-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold">QR 코드 생성기</h1>
+                  <p className="text-sm text-gray-500">URL, 텍스트, 전화번호, 이메일, Wi-Fi 정보를 QR 코드로 변환</p>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Main */}
+          <main className="max-w-6xl mx-auto px-4 py-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+              {/* Left: Input Panel */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* Type Selector */}
+                <Card>
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">입력 타입</h3>
+                  <div className="grid grid-cols-5 gap-2">
+                    {INPUT_TYPES.map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => handleTypeChange(t.id)}
+                        className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl transition-all cursor-pointer text-center ${
+                          inputType === t.id
+                            ? 'bg-accent/20 border-2 border-accent text-white'
+                            : 'bg-dark-800 border-2 border-transparent text-gray-400 hover:bg-dark-600 hover:text-gray-200'
+                        }`}
+                      >
+                        <span className="text-xl">{t.icon}</span>
+                        <span className="text-xs font-medium">{t.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Card>
+
+                {/* Input Fields */}
+                <Card className="fade-in">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">내용 입력</h3>
+                  <InputComponent data={inputData} setData={setInputData} />
+                </Card>
+
+                {/* Options Toggle */}
+                <Card>
+                  <button
+                    onClick={() => setShowOptions(!showOptions)}
+                    className="w-full flex items-center justify-between cursor-pointer"
+                  >
+                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">QR 코드 옵션</h3>
+                    <svg className={`w-5 h-5 text-gray-500 transition-transform ${showOptions ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {showOptions && (
+                    <div className="mt-5 space-y-5 fade-in">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <Select
+                          label="QR 코드 크기"
+                          value={size}
+                          onChange={v => setSize(Number(v))}
+                          options={SIZE_OPTIONS}
+                        />
+                        <Select
+                          label="에러 보정 레벨"
+                          value={errorLevel}
+                          onChange={setErrorLevel}
+                          options={ERROR_LEVELS}
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <ColorPicker label="전경색 (QR 코드)" value={fgColor} onChange={setFgColor} />
+                        <ColorPicker label="배경색" value={bgColor} onChange={setBgColor} />
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <Button variant="ghost" size="sm" onClick={() => { setFgColor('#000000'); setBgColor('#ffffff'); }}>
+                          색상 초기화
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+
+                {/* History - on mobile, show below */}
+                <div className="lg:hidden">
+                  <HistoryPanel
+                    history={history}
+                    onSelect={handleSelectHistory}
+                    onDelete={handleDeleteHistory}
+                    onClearAll={handleClearHistory}
+                  />
+                </div>
+              </div>
+
+              {/* Right: Preview & Actions */}
+              <div className="space-y-6">
+                <Card className="sticky top-8">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-5 text-center">미리보기</h3>
+
+                  <div className="flex justify-center mb-5">
+                    {hasData ? (
+                      <div className="p-4 rounded-2xl" style={{ backgroundColor: bgColor }}>
+                        <QRPreview
+                          qrData={qrData}
+                          size={size}
+                          fgColor={fgColor}
+                          bgColor={bgColor}
+                          errorLevel={errorLevel}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-64 h-64 bg-dark-800 rounded-2xl flex flex-col items-center justify-center">
+                        <svg className="w-16 h-16 text-gray-700 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                        </svg>
+                        <p className="text-gray-600 text-sm">내용을 입력하면</p>
+                        <p className="text-gray-600 text-sm">QR 코드가 생성됩니다</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {hasData && (
+                    <div className="space-y-2.5 fade-in">
+                      <p className="text-xs text-gray-500 text-center truncate px-2 mb-4" title={qrData}>
+                        {qrData}
+                      </p>
+                      <Button className="w-full" onClick={handleDownload}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        PNG 다운로드
+                      </Button>
+                      <Button variant="secondary" className="w-full" onClick={handleAddHistory}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                        </svg>
+                        히스토리에 저장
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Info */}
+                  <div className="mt-5 pt-4 border-t border-dark-500">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="text-gray-500">크기</div>
+                      <div className="text-gray-300 text-right">{size}x{size}px</div>
+                      <div className="text-gray-500">에러 보정</div>
+                      <div className="text-gray-300 text-right">{ERROR_LEVELS.find(e => e.value === errorLevel)?.desc}</div>
+                      <div className="text-gray-500">타입</div>
+                      <div className="text-gray-300 text-right">{INPUT_TYPES.find(t => t.id === inputType)?.label}</div>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* History - on desktop */}
+                <div className="hidden lg:block">
+                  <HistoryPanel
+                    history={history}
+                    onSelect={handleSelectHistory}
+                    onDelete={handleDeleteHistory}
+                    onClearAll={handleClearHistory}
+                  />
+                </div>
+              </div>
+            </div>
+          </main>
+
+          {/* Footer */}
+          <footer className="border-t border-dark-700 mt-12">
+            <div className="max-w-6xl mx-auto px-4 py-6 text-center text-sm text-gray-600">
+              스마트폰 카메라로 QR 코드를 스캔하면 바로 해당 URL로 이동합니다
+            </div>
+          </footer>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

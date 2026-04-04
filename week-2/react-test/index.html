@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HTML & CSS 스타일 모음</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: #f5f5f5; color: #333; }
+
+    /* 섹션 공통 */
+    section {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      border-bottom: 2px dashed #ddd;
+    }
+    section:last-child { border-bottom: none; }
+    .section-title {
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 24px;
+      color: #222;
+    }
+    .section-number {
+      display: inline-block;
+      background: #4f46e5;
+      color: white;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 32px;
+      font-size: 14px;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    /* ===== 1. Flexbox ===== */
+    .flex-container {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .box {
+      width: 140px; height: 140px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      transition: transform 0.2s;
+    }
+    .box:hover { transform: scale(1.1); }
+    .box:nth-child(1) { background: #e74c3c; }
+    .box:nth-child(2) { background: #3498db; }
+    .box:nth-child(3) { background: #2ecc71; }
+    .box:nth-child(4) { background: #f39c12; }
+
+    /* ===== 2. Grid 카드 ===== */
+    .grid-section { background: #1a1a2e; color: #eee; }
+    .grid-section .section-title { color: #eee; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: #16213e;
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid #0f3460;
+      transition: border-color 0.3s;
+    }
+    .card:hover { border-color: #e94560; }
+    .card h3 { font-size: 18px; margin-bottom: 8px; color: #e94560; }
+    .card p { font-size: 14px; line-height: 1.6; color: #aaa; }
+    .tag {
+      display: inline-block;
+      background: #0f3460;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      margin-top: 12px;
+      color: #53d8fb;
+    }
+
+    /* ===== 3. 버튼 ===== */
+    .btn-group { text-align: center; margin-bottom: 20px; }
+    .btn-group h3 { margin-bottom: 12px; color: #666; font-size: 14px; }
+    button {
+      padding: 10px 24px;
+      margin: 4px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #4f46e5; color: white; }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-success { background: #10b981; color: white; }
+    .btn-success:hover { background: #059669; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-outline { background: transparent; border: 2px solid #4f46e5; color: #4f46e5; }
+    .btn-outline:hover { background: #4f46e5; color: white; }
+    .btn-rounded { border-radius: 50px; padding: 10px 28px; background: #8b5cf6; color: white; }
+    .btn-rounded:hover { background: #7c3aed; }
+    .btn-ghost { background: transparent; color: #6b7280; }
+    .btn-ghost:hover { background: #f3f4f6; }
+    .btn-lg { padding: 14px 32px; font-size: 16px; background: #0ea5e9; color: white; border-radius: 10px; }
+    .btn-sm { padding: 6px 14px; font-size: 12px; background: #f59e0b; color: white; }
+
+    /* ===== 4. 폼 ===== */
+    .form-section { background: linear-gradient(135deg, #667eea, #764ba2); }
+    .form-section .section-title { color: white; }
+    .form-card {
+      background: white;
+      padding: 32px;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      max-width: 380px;
+      margin: 0 auto;
+    }
+    .form-card label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    .form-card input,
+    .form-card select,
+    .form-card textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-card input:focus,
+    .form-card select:focus,
+    .form-card textarea:focus { border-color: #667eea; }
+    .form-card textarea { resize: vertical; min-height: 80px; }
+    .submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .submit-btn:hover { opacity: 0.9; }
+
+    /* ===== 5. 애니메이션 ===== */
+    .anim-section { background: #0f172a; color: white; }
+    .anim-section .section-title { color: white; }
+    .demo { margin-bottom: 32px; text-align: center; }
+    .demo h3 { margin-bottom: 12px; color: #94a3b8; font-size: 14px; }
+    .anim-row { display: flex; justify-content: center; gap: 60px; flex-wrap: wrap; }
+
+    .bounce {
+      width: 50px; height: 50px;
+      background: #f43f5e;
+      border-radius: 50%;
+      animation: bounce 1s infinite;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-25px); }
+    }
+    .spin {
+      width: 50px; height: 50px;
+      border: 4px solid transparent;
+      border-top: 4px solid #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pulse {
+      width: 50px; height: 50px;
+      background: #10b981;
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.6; }
+    }
+    .slide-track {
+      width: 200px;
+      background: #1e293b;
+      border-radius: 8px;
+      padding: 8px 0;
+    }
+    .slide {
+      width: 40px; height: 40px;
+      background: #f59e0b;
+      border-radius: 8px;
+      animation: slide 2s ease-in-out infinite alternate;
+    }
+    @keyframes slide {
+      from { transform: translateX(0); }
+      to { transform: translateX(160px); }
+    }
+    .fade-text {
+      font-size: 22px;
+      font-weight: bold;
+      background: linear-gradient(90deg, #ec4899, #8b5cf6, #3b82f6);
+      background-size: 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: gradient 3s ease infinite;
+    }
+    @keyframes gradient {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== 1. Flexbox ==================== -->
+  <section>
+    <h2 class="section-title"><span class="section-number">1</span> Flexbox 레이아웃</h2>
+    <div class="flex-container">
+      <div class="box">Box 1</div>
+      <div class="box">Box 2</div>
+      <div class="box">Box 3</div>
+      <div class="box">Box 4</div>
+    </div>
+  </section>
+
+  <!-- ==================== 2. Grid 카드 ==================== -->
+  <section class="grid-section">
+    <h2 class="section-title"><span class="section-number">2</span> Grid 카드 레이아웃</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>HTML</h3>
+        <p>웹 페이지의 구조를 정의하는 마크업 언어입니다.</p>
+        <span class="tag">기초</span>
+      </div>
+      <div class="card">
+        <h3>CSS</h3>
+        <p>웹 페이지의 스타일과 레이아웃을 담당합니다.</p>
+        <span class="tag">스타일</span>
+      </div>
+      <div class="card">
+        <h3>JavaScript</h3>
+        <p>웹 페이지에 동적인 기능을 추가합니다.</p>
+        <span class="tag">프로그래밍</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 3. 버튼 스타일 ==================== -->
+  <section>
+    <h2 class="section-title"><span class="section-number">3</span> 버튼 스타일 모음</h2>
+    <div class="btn-group">
+      <h3>기본 버튼</h3>
+      <button class="btn-primary">Primary</button>
+      <button class="btn-success">Success</button>
+      <button class="btn-danger">Danger</button>
+    </div>
+    <div class="btn-group">
+      <h3>변형 버튼</h3>
+      <button class="btn-outline">Outline</button>
+      <button class="btn-rounded">Rounded</button>
+      <button class="btn-ghost">Ghost</button>
+    </div>
+    <div class="btn-group">
+      <h3>크기 버튼</h3>
+      <button class="btn-lg">Large</button>
+      <button class="btn-primary">Medium</button>
+      <button class="btn-sm">Small</button>
+    </div>
+  </section>
+
+  <!-- ==================== 4. 폼 스타일링 ==================== -->
+  <section class="form-section">
+    <h2 class="section-title"><span class="section-number">4</span> 폼 스타일링</h2>
+    <div class="form-card">
+      <form>
+        <label for="name">이름</label>
+        <input type="text" id="name" placeholder="홍길동">
+        <label for="email">이메일</label>
+        <input type="email" id="email" placeholder="example@email.com">
+        <label for="role">직업</label>
+        <select id="role">
+          <option value="">선택하세요</option>
+          <option value="dev">개발자</option>
+          <option value="designer">디자이너</option>
+          <option value="pm">기획자</option>
+        </select>
+        <label for="bio">자기소개</label>
+        <textarea id="bio" placeholder="간단히 소개해주세요"></textarea>
+        <button type="submit" class="submit-btn">가입하기</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ==================== 5. CSS 애니메이션 ==================== -->
+  <section class="anim-section">
+    <h2 class="section-title"><span class="section-number">5</span> CSS 애니메이션</h2>
+    <div class="anim-row">
+      <div class="demo">
+        <h3>Bounce</h3>
+        <div class="bounce"></div>
+      </div>
+      <div class="demo">
+        <h3>Spinner</h3>
+        <div class="spin"></div>
+      </div>
+      <div class="demo">
+        <h3>Pulse</h3>
+        <div class="pulse"></div>
+      </div>
+      <div class="demo">
+        <h3>Slide</h3>
+        <div class="slide-track">
+          <div class="slide"></div>
+        </div>
+      </div>
+      <div class="demo">
+        <h3>Gradient Text</h3>
+        <p class="fade-text">Hello, CSS!</p>
+      </div>
+    </div>
+  </section>
+
+</body>
+</html>
