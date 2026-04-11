@@ -1,0 +1,10 @@
+# 환경변수 파일 - 절대 커밋 금지
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+
+# 로그
+*.log
