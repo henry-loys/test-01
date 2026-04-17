@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Midjourney</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #000;
+      --fg: #f5f5f7;
+      --fg-muted: #86868b;
+      --line: rgba(255,255,255,0.10);
+      --surface: rgba(255,255,255,0.04);
+      --surface-hover: rgba(255,255,255,0.08);
+      --violet: #A78BFA;
+      --violet-strong: #8B5CF6;
+      --violet-soft: rgba(167,139,250,0.14);
+    }
+    html, body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "SF Pro Display", "SF Pro Text", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      letter-spacing: -0.01em;
+    }
+
+    /* scrollbar - minimal */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* typography utilities */
+    .tracking-tightest { letter-spacing: -0.035em; }
+
+    /* subtle fade-up */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-up { animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+    /* shimmer loading */
+    @keyframes shimmer {
+      0% { background-position: -600px 0; }
+      100% { background-position: 600px 0; }
+    }
+    .shimmer {
+      background: linear-gradient(90deg,
+        rgba(255,255,255,0.03) 0%,
+        rgba(255,255,255,0.08) 50%,
+        rgba(255,255,255,0.03) 100%);
+      background-size: 1200px 100%;
+      animation: shimmer 1.8s linear infinite;
+    }
+
+    /* spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.8s linear infinite; }
+
+    /* fade in / pop in */
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .fade-in { animation: fadeIn 0.2s ease both; }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.97); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .pop-in { animation: popIn 0.22s cubic-bezier(0.22,1,0.36,1) both; }
+
+    /* toast */
+    @keyframes slideUp {
+      from { opacity: 0; transform: translate(-50%, 16px); }
+      to   { opacity: 1; transform: translate(-50%, 0); }
+    }
+    .toast-anim { animation: slideUp 0.22s ease both; }
+
+    /* prompt focus ring */
+    textarea.prompt-area:focus,
+    textarea.prompt-area:focus-visible {
+      outline: none;
+      border-color: rgba(167,139,250,0.55);
+      box-shadow: 0 0 0 4px rgba(167,139,250,0.14);
+    }
+
+    /* primary button */
+    .btn-primary {
+      background: var(--violet-strong);
+      color: #fff;
+      transition: background 0.18s ease, transform 0.1s ease;
+    }
+    .btn-primary:hover:not(:disabled) { background: #7C4FF4; }
+    .btn-primary:active:not(:disabled) { transform: translateY(1px); }
+
+    /* segmented control */
+    .segmented {
+      display: inline-flex;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px;
+      gap: 2px;
+    }
+    .segmented > button {
+      border-radius: 999px;
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.65);
+      transition: background 0.18s ease, color 0.18s ease;
+      white-space: nowrap;
+    }
+    .segmented > button:hover:not(.active) { color: #fff; }
+    .segmented > button.active {
+      background: var(--violet-strong);
+      color: #fff;
+      box-shadow: 0 4px 12px -4px rgba(139,92,246,0.55);
+    }
+
+    /* pill (chip) */
+    .pill {
+      flex-shrink: 0;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: rgba(255,255,255,0.78);
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pill:hover:not(.active) { background: var(--surface-hover); color: #fff; }
+    .pill.active {
+      background: var(--violet-soft);
+      border-color: rgba(167,139,250,0.55);
+      color: #E9E0FF;
+    }
+
+    /* card (image) hover */
+    .img-card { transition: transform 0.35s cubic-bezier(0.22,1,0.36,1); }
+    .img-card:hover { transform: translateY(-2px); }
+    .img-card .overlay { opacity: 0; transition: opacity 0.25s ease; }
+    .img-card:hover .overlay { opacity: 1; }
+
+    /* hairline */
+    .hairline { height: 1px; background: var(--line); }
+
+    /* page max width for reading content */
+    .page { max-width: 980px; margin-left: auto; margin-right: auto; }
+
+    .no-scroll { overflow: hidden; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ========================================
+    // Constants
+    // ========================================
+    const STYLE_PRESETS = [
+      { id: "watercolor",  name: "수채화",        keywords: "watercolor painting, soft brush, paper texture" },
+      { id: "3drender",    name: "3D 렌더",       keywords: "3d render, octane, subsurface scattering, studio light" },
+      { id: "pixel",       name: "픽셀 아트",     keywords: "pixel art, 16bit, retro game, crisp pixels" },
+      { id: "cyberpunk",   name: "사이버펑크",    keywords: "cyberpunk, neon lights, rain, blade runner atmosphere" },
+      { id: "ghibli",      name: "지브리",        keywords: "studio ghibli style, hand drawn, painterly, warm nostalgia" },
+      { id: "oil",         name: "유화",          keywords: "oil painting, thick impasto brush strokes, classical" },
+      { id: "lineart",     name: "미니멀 라인",   keywords: "minimal line art, single line, monochrome, elegant" },
+      { id: "polaroid",    name: "폴라로이드",    keywords: "polaroid photograph, film grain, faded colors, 1990s" },
+      { id: "dreamcore",   name: "드림코어",      keywords: "dreamcore, liminal space, nostalgic surreal, pastel haze" },
+      { id: "anime",       name: "일본 애니",     keywords: "japanese anime, makoto shinkai, vivid sky, cel shading" },
+      { id: "vaporwave",   name: "베이퍼웨이브",  keywords: "vaporwave, retro 80s, glitch, gradient purple pink" },
+      { id: "ink",         name: "수묵화",        keywords: "ink wash painting, sumi-e, east asian, minimalist" },
+    ];
+
+    const MOOD_PRESETS = [
+      { id: "dreamy",    name: "Dreamy",     keywords: "dreamy, ethereal, soft focus, hazy" },
+      { id: "dark",      name: "Dark",       keywords: "dark moody, chiaroscuro, deep shadows, dramatic" },
+      { id: "vibrant",   name: "Vibrant",    keywords: "vibrant colors, high saturation, punchy, energetic" },
+      { id: "cinematic", name: "Cinematic",  keywords: "cinematic lighting, 35mm, film still, anamorphic" },
+      { id: "cozy",      name: "Cozy",       keywords: "cozy, warm tones, intimate, hygge" },
+      { id: "surreal",   name: "Surreal",    keywords: "surreal, dreamlike, impossible geometry, magritte" },
+      { id: "serene",    name: "Serene",     keywords: "serene, calm, peaceful, balanced" },
+      { id: "epic",      name: "Epic",       keywords: "epic scale, grandiose, heroic, sweeping vista" },
+    ];
+
+    const ASPECT_RATIOS = [
+      { id: "1:1",  label: "1:1",  w: 1024, h: 1024, tag: "Square" },
+      { id: "3:4",  label: "3:4",  w: 720,  h: 960,  tag: "Portrait" },
+      { id: "4:3",  label: "4:3",  w: 960,  h: 720,  tag: "Classic" },
+      { id: "16:9", label: "16:9", w: 1024, h: 576,  tag: "Wide" },
+      { id: "9:16", label: "9:16", w: 576,  h: 1024, tag: "Story" },
+    ];
+
+    const SAMPLE_PROMPTS = [
+      "a lone astronaut drinking coffee on a misty mountain at dawn",
+      "neon jellyfish floating above tokyo skyline, reflective water",
+      "an ancient library inside a giant hollow tree, sunbeams through leaves",
+      "a cat detective in a trench coat walking through foggy alleyway",
+      "floating islands with waterfalls cascading into the clouds",
+    ];
+
+    const HISTORY_KEY = "midjourney-history-v1";
+    const MAX_HISTORY = 40;
+
+    // ========================================
+    // Utilities
+    // ========================================
+    const uid = () =>
+      Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+    const loadHistory = () => {
+      try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) { return []; }
+    };
+
+    const saveHistory = (items) => {
+      try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, MAX_HISTORY)));
+      } catch (e) {}
+    };
+
+    const fmtTime = (ts) => {
+      const d = new Date(ts);
+      const now = new Date();
+      const diff = (now - d) / 1000;
+      if (diff < 60) return "방금";
+      if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+      return d.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
+    };
+
+    // ========================================
+    // Primitives
+    // ========================================
+    function Segmented({ value, onChange, options }) {
+      return (
+        <div className="segmented">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => onChange(o.value)}
+              className={value === o.value ? "active" : ""}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    function PillRow({ items, value, onChange }) {
+      return (
+        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-6 px-6 pb-1">
+          {items.map((it) => (
+            <button
+              key={it.id}
+              type="button"
+              onClick={() => onChange(value === it.id ? null : it.id)}
+              className={`pill ${value === it.id ? "active" : ""}`}
+              title={it.keywords}
+            >
+              {it.name}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    function Toast({ message, visible }) {
+      if (!visible) return null;
+      return (
+        <div className="fixed left-1/2 bottom-8 z-[100] toast-anim pointer-events-none">
+          <div className="px-4 py-2.5 rounded-full text-sm text-white bg-white/10 border border-white/15 backdrop-blur-xl shadow-2xl">
+            {message}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Lightbox
+    // ========================================
+    function Lightbox({ item, onClose, onToast }) {
+      useEffect(() => {
+        if (!item) return;
+        document.body.classList.add("no-scroll");
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        window.addEventListener("keydown", onKey);
+        return () => {
+          document.body.classList.remove("no-scroll");
+          window.removeEventListener("keydown", onKey);
+        };
+      }, [item, onClose]);
+
+      if (!item) return null;
+
+      const style = STYLE_PRESETS.find((s) => s.id === item.style);
+      const mood = MOOD_PRESETS.find((m) => m.id === item.mood);
+      const ar = ASPECT_RATIOS.find((a) => a.id === item.ratio);
+
+      const copy = async (text) => {
+        try {
+          await navigator.clipboard.writeText(text);
+          onToast("링크가 복사되었습니다");
+        } catch (e) {
+          onToast("복사 실패");
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-[90] fade-in" onClick={onClose}>
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-md"></div>
+          <div
+            className="relative z-10 h-full w-full flex items-center justify-center p-4 md:p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pop-in w-full max-w-6xl max-h-full flex flex-col md:flex-row gap-5">
+              <div className="flex-1 min-h-0 flex items-center justify-center">
+                <img
+                  src={item.url}
+                  alt={item.prompt}
+                  className="max-h-[85vh] max-w-full rounded-2xl border border-white/10"
+                />
+              </div>
+              <div className="md:w-[320px] bg-white/[0.04] border border-white/10 rounded-2xl p-5 flex flex-col gap-4 overflow-y-auto max-h-[85vh]">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-white/40">Generation</span>
+                  <button
+                    onClick={onClose}
+                    className="text-white/50 hover:text-white text-lg leading-none"
+                    aria-label="닫기"
+                  >✕</button>
+                </div>
+
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-1.5">Prompt</div>
+                  <p className="text-sm text-white/90 leading-relaxed">{item.prompt}</p>
+                </div>
+
+                <div className="hairline"></div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-1">Style</div>
+                    <div className="text-white/90">{style?.name || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-1">Mood</div>
+                    <div className="text-white/90">{mood?.name || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-1">Aspect</div>
+                    <div className="text-white/90">{item.ratio} · {ar?.tag}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-1">Color</div>
+                    <div className="text-white/90">{item.colorMode === "bw" ? "흑백" : "컬러"}</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-1">Size</div>
+                    <div className="text-white/90">{item.width}×{item.height}</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-1">Seed</div>
+                    <div className="font-mono text-[11px] text-white/70 break-all">{item.seed}</div>
+                  </div>
+                </div>
+
+                <div className="hairline"></div>
+
+                <div className="flex flex-col gap-2">
+                  <a
+                    href={item.url}
+                    download
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-primary inline-flex items-center justify-center px-4 py-2.5 rounded-full text-sm font-semibold"
+                  >
+                    다운로드
+                  </a>
+                  <button
+                    onClick={() => copy(item.url)}
+                    className="inline-flex items-center justify-center px-4 py-2.5 rounded-full text-sm font-medium text-white/85 bg-white/5 border border-white/15 hover:bg-white/10 transition"
+                  >
+                    링크 복사
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Header
+    // ========================================
+    function Header() {
+      return (
+        <header className="sticky top-0 z-40 border-b border-white/5 bg-black/70 backdrop-blur-xl">
+          <div className="page px-6 h-14 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-full" style={{ background: "var(--violet-strong)" }}></div>
+              <span className="text-[15px] font-semibold tracking-tight">My Midjourney</span>
+            </div>
+            <nav className="hidden md:flex items-center gap-7 text-[13px] text-white/60">
+              <a className="hover:text-white transition" href="#create">Create</a>
+              <a className="hover:text-white transition" href="#gallery">Gallery</a>
+            </nav>
+          </div>
+        </header>
+      );
+    }
+
+    // ========================================
+    // Hero
+    // ========================================
+    function Hero() {
+      return (
+        <section className="page px-6 pt-24 md:pt-32 pb-12 md:pb-16 text-center">
+          <h1 className="text-5xl md:text-7xl font-semibold tracking-tightest leading-[1.05]">
+            Imagine anything.
+          </h1>
+          <p className="mt-5 text-[17px] md:text-[19px] text-white/60 max-w-xl mx-auto leading-relaxed">
+            한 문장을 적으면 AI가 당신의 스타일로 이미지를 만듭니다.
+          </p>
+        </section>
+      );
+    }
+
+    // ========================================
+    // Prompt Section
+    // ========================================
+    function PromptSection({
+      prompt, setPrompt,
+      selectedStyle, setSelectedStyle,
+      selectedMood, setSelectedMood,
+      ratio, setRatio,
+      count, setCount,
+      colorMode, setColorMode,
+      onGenerate, isGenerating,
+    }) {
+      const onSuggest = () => {
+        const p = SAMPLE_PROMPTS[Math.floor(Math.random() * SAMPLE_PROMPTS.length)];
+        setPrompt(p);
+      };
+      const disabled = !prompt.trim() || isGenerating;
+
+      return (
+        <section id="create" className="page px-6">
+          <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 md:p-8">
+            {/* Prompt */}
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-[12px] uppercase tracking-[0.18em] text-white/45 font-medium">
+                Prompt
+              </label>
+              <button
+                type="button"
+                onClick={onSuggest}
+                className="text-[12px] text-white/50 hover:text-white transition"
+              >
+                예시 가져오기
+              </button>
+            </div>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="a lonely lighthouse on a cliff at stormy sunset"
+              rows={3}
+              className="prompt-area w-full resize-none rounded-2xl bg-black/40 border border-white/10 px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 transition"
+            />
+
+            {/* Style */}
+            <div className="mt-8">
+              <label className="text-[12px] uppercase tracking-[0.18em] text-white/45 font-medium block mb-3">
+                Style
+              </label>
+              <PillRow items={STYLE_PRESETS} value={selectedStyle} onChange={setSelectedStyle} />
+            </div>
+
+            {/* Mood */}
+            <div className="mt-6">
+              <label className="text-[12px] uppercase tracking-[0.18em] text-white/45 font-medium block mb-3">
+                Mood
+              </label>
+              <PillRow items={MOOD_PRESETS} value={selectedMood} onChange={setSelectedMood} />
+            </div>
+
+            <div className="hairline mt-8 mb-6"></div>
+
+            {/* Toggles */}
+            <div className="flex flex-col gap-5">
+              <ControlRow label="Aspect Ratio">
+                <Segmented
+                  value={ratio}
+                  onChange={setRatio}
+                  options={ASPECT_RATIOS.map((a) => ({ value: a.id, label: a.label }))}
+                />
+              </ControlRow>
+
+              <ControlRow label="Count">
+                <Segmented
+                  value={count}
+                  onChange={setCount}
+                  options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n) }))}
+                />
+              </ControlRow>
+
+              <ControlRow label="Color">
+                <Segmented
+                  value={colorMode}
+                  onChange={setColorMode}
+                  options={[
+                    { value: "color", label: "컬러" },
+                    { value: "bw",    label: "흑백" },
+                  ]}
+                />
+              </ControlRow>
+            </div>
+
+            {/* Generate */}
+            <div className="mt-9 flex justify-center">
+              <button
+                type="button"
+                onClick={onGenerate}
+                disabled={disabled}
+                className="btn-primary inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full text-[15px] font-semibold min-w-[220px] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isGenerating ? (
+                  <>
+                    <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white spin inline-block"></span>
+                    Generating…
+                  </>
+                ) : (
+                  "이미지 생성"
+                )}
+              </button>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    function ControlRow({ label, children }) {
+      return (
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <span className="text-[13px] font-medium text-white/70">{label}</span>
+          {children}
+        </div>
+      );
+    }
+
+    // ========================================
+    // Result Grid
+    // ========================================
+    function ResultGrid({ results, isGenerating, count, ratio, onOpen, onRevariation, onToast }) {
+      const ar = ASPECT_RATIOS.find((a) => a.id === ratio) || ASPECT_RATIOS[0];
+      const aspect = ar.w / ar.h;
+
+      if (isGenerating) {
+        const gridCols = count === 1 ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
+        return (
+          <section className="page px-6 mt-12">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold tracking-tight">Generating…</h2>
+              <span className="text-[12px] text-white/40">잠시만요</span>
+            </div>
+            <div className={`grid gap-4 ${gridCols}`}>
+              {Array.from({ length: count }).map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl shimmer border border-white/5"
+                  style={{ aspectRatio: aspect }}
+                ></div>
+              ))}
+            </div>
+          </section>
+        );
+      }
+
+      if (!results || results.length === 0) return null;
+
+      const gridCols =
+        results.length === 1 ? "grid-cols-1"
+        : "grid-cols-1 sm:grid-cols-2";
+
+      return (
+        <section className="page px-6 mt-12">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold tracking-tight">Results</h2>
+            <span className="text-[12px] text-white/40">{results.length}장</span>
+          </div>
+          <div className={`grid gap-4 ${gridCols}`}>
+            {results.map((r, i) => (
+              <ResultCard
+                key={r.id}
+                item={r}
+                index={i}
+                onOpen={() => onOpen(r)}
+                onRevariation={() => onRevariation(r)}
+                onToast={onToast}
+              />
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    function ResultCard({ item, index, onOpen, onRevariation, onToast }) {
+      const style = STYLE_PRESETS.find((s) => s.id === item.style);
+      const mood = MOOD_PRESETS.find((m) => m.id === item.mood);
+      const ar = ASPECT_RATIOS.find((a) => a.id === item.ratio);
+      const aspect = ar ? ar.w / ar.h : 1;
+
+      const copyLink = async (e) => {
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(item.url);
+          onToast("링크가 복사되었습니다");
+        } catch (err) { onToast("복사 실패"); }
+      };
+
+      const download = (e) => {
+        e.stopPropagation();
+        const a = document.createElement("a");
+        a.href = item.url;
+        a.download = `midjourney-${item.seed}.jpg`;
+        a.target = "_blank";
+        a.rel = "noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        onToast("다운로드를 시작합니다");
+      };
+
+      const revar = (e) => {
+        e.stopPropagation();
+        onRevariation(item);
+      };
+
+      return (
+        <div
+          className="img-card relative rounded-2xl overflow-hidden border border-white/10 bg-black/40 cursor-zoom-in fade-up group"
+          style={{ aspectRatio: aspect, animationDelay: `${index * 60}ms` }}
+          onClick={onOpen}
+        >
+          <img
+            src={item.url}
+            alt={item.prompt}
+            loading="lazy"
+            className="w-full h-full object-cover"
+          />
+
+          {/* actions */}
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <IconButton title="변형 재생성" onClick={revar}>↻</IconButton>
+            <IconButton title="링크 복사" onClick={copyLink}>⎘</IconButton>
+            <IconButton title="다운로드" onClick={download}>↓</IconButton>
+          </div>
+
+          {/* bottom overlay */}
+          <div className="overlay absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/85 via-black/40 to-transparent">
+            <p className="text-[13px] text-white/95 leading-snug line-clamp-2 mb-2">
+              {item.prompt}
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-white/65">
+              {style && <span className="px-2 py-0.5 rounded-full bg-white/10 border border-white/10">{style.name}</span>}
+              {mood && <span className="px-2 py-0.5 rounded-full bg-white/10 border border-white/10">{mood.name}</span>}
+              <span className="px-2 py-0.5 rounded-full bg-white/10 border border-white/10">{item.ratio}</span>
+              <span className="px-2 py-0.5 rounded-full bg-white/10 border border-white/10">
+                {item.colorMode === "bw" ? "흑백" : "컬러"}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function IconButton({ onClick, title, children }) {
+      return (
+        <button
+          type="button"
+          title={title}
+          onClick={onClick}
+          className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-black/55 backdrop-blur-md border border-white/15 text-white/90 hover:bg-black/80 transition"
+        >
+          {children}
+        </button>
+      );
+    }
+
+    // ========================================
+    // Gallery
+    // ========================================
+    function Gallery({ history, onOpen, onDelete, onClearAll }) {
+      if (!history || history.length === 0) {
+        return (
+          <section id="gallery" className="page px-6 mt-16 mb-24">
+            <h2 className="text-xl font-semibold tracking-tight mb-4">My Gallery</h2>
+            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-10 text-center">
+              <p className="text-white/60 text-sm">아직 생성한 이미지가 없습니다.</p>
+              <p className="text-white/35 text-xs mt-1">위에서 프롬프트를 입력하고 생성해 보세요.</p>
+            </div>
+          </section>
+        );
+      }
+
+      return (
+        <section id="gallery" className="page px-6 mt-16 mb-24">
+          <div className="flex items-end justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight">My Gallery</h2>
+              <p className="text-[12px] text-white/40 mt-0.5">총 {history.length}장</p>
+            </div>
+            <button
+              onClick={onClearAll}
+              className="text-[12px] text-white/50 hover:text-white transition"
+            >
+              전체 비우기
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {history.map((item, i) => {
+              const style = STYLE_PRESETS.find((s) => s.id === item.style);
+              return (
+                <div
+                  key={item.id}
+                  className="img-card relative rounded-xl overflow-hidden border border-white/10 bg-black/40 cursor-zoom-in group"
+                  style={{ aspectRatio: 1, animationDelay: `${i * 20}ms` }}
+                  onClick={() => onOpen(item)}
+                >
+                  <img
+                    src={item.url}
+                    alt={item.prompt}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+                    className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/60 backdrop-blur border border-white/15 text-white/80 hover:text-white hover:bg-white/20 opacity-0 group-hover:opacity-100 transition-all text-xs"
+                    title="삭제"
+                  >✕</button>
+                  <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/85 to-transparent opacity-0 group-hover:opacity-100 transition">
+                    <div className="text-[11px] text-white/85 line-clamp-2 leading-snug">{item.prompt}</div>
+                    <div className="text-[10px] text-white/45 mt-1 flex items-center justify-between">
+                      <span>{style ? style.name : ""}</span>
+                      <span>{fmtTime(item.createdAt)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      );
+    }
+
+    // ========================================
+    // Footer
+    // ========================================
+    function Footer() {
+      return (
+        <footer className="border-t border-white/5">
+          <div className="page px-6 py-8 flex items-center justify-between text-[12px] text-white/40">
+            <span>My Midjourney</span>
+            <span>© 2026</span>
+          </div>
+        </footer>
+      );
+    }
+
+    // ========================================
+    // App
+    // ========================================
+    function App() {
+      const [prompt, setPrompt] = useState("");
+      const [selectedStyle, setSelectedStyle] = useState("ghibli");
+      const [selectedMood, setSelectedMood] = useState("cinematic");
+      const [ratio, setRatio] = useState("1:1");
+      const [count, setCount] = useState(2);
+      const [colorMode, setColorMode] = useState("color");
+
+      const [isGenerating, setIsGenerating] = useState(false);
+      const [results, setResults] = useState([]);
+      const [history, setHistory] = useState(() => loadHistory());
+      const [lightboxItem, setLightboxItem] = useState(null);
+
+      const [toast, setToast] = useState({ visible: false, message: "" });
+      const toastTimerRef = useRef(null);
+
+      const showToast = useCallback((message) => {
+        setToast({ visible: true, message });
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => {
+          setToast({ visible: false, message: "" });
+        }, 1800);
+      }, []);
+
+      useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
+
+      const pushHistory = useCallback((items) => {
+        setHistory((prev) => {
+          const next = [...items, ...prev].slice(0, MAX_HISTORY);
+          saveHistory(next);
+          return next;
+        });
+      }, []);
+
+      const callGenerateApi = useCallback(async ({ prompt, style, mood, ratio, count, colorMode }) => {
+        const styleDef = STYLE_PRESETS.find((s) => s.id === style);
+        const moodDef = MOOD_PRESETS.find((m) => m.id === mood);
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: prompt.trim(),
+            style,
+            styleKeywords: styleDef?.keywords || "",
+            mood,
+            moodKeywords: moodDef?.keywords || "",
+            ratio,
+            count,
+            colorMode: colorMode || "color",
+          }),
+        });
+        const json = await res.json().catch(() => ({ success: false, message: "응답을 해석할 수 없습니다" }));
+        if (!res.ok || !json.success) {
+          throw new Error(json.message || `API 오류 (${res.status})`);
+        }
+        return json.data;
+      }, []);
+
+      const handleGenerate = useCallback(async () => {
+        if (!prompt.trim()) return;
+        setIsGenerating(true);
+        setResults([]);
+
+        try {
+          const data = await callGenerateApi({
+            prompt, style: selectedStyle, mood: selectedMood, ratio, count, colorMode,
+          });
+          const now = Date.now();
+          const generated = (data.images || []).map((img, i) => ({
+            id: uid(),
+            prompt: prompt.trim(),
+            style: selectedStyle,
+            mood: selectedMood,
+            ratio,
+            colorMode,
+            url: img.url,
+            seed: img.seed || `${now}-${i}`,
+            width: img.width,
+            height: img.height,
+            revisedPrompt: img.revisedPrompt || "",
+            createdAt: now + i,
+          }));
+          if (generated.length === 0) throw new Error("생성된 이미지가 없습니다");
+          setResults(generated);
+          pushHistory(generated);
+          showToast(`${generated.length}장 생성 완료`);
+        } catch (err) {
+          console.error(err);
+          showToast(err.message || "이미지 생성 실패");
+        } finally {
+          setIsGenerating(false);
+        }
+      }, [prompt, selectedStyle, selectedMood, ratio, count, colorMode, callGenerateApi, pushHistory, showToast]);
+
+      const handleRevariation = useCallback(async (item) => {
+        showToast("변형 생성 중…");
+        try {
+          const data = await callGenerateApi({
+            prompt: item.prompt,
+            style: item.style,
+            mood: item.mood,
+            ratio: item.ratio,
+            count: 1,
+            colorMode: item.colorMode || "color",
+          });
+          const img = data.images?.[0];
+          if (!img) throw new Error("변형 생성 실패");
+          const variant = {
+            ...item,
+            id: uid(),
+            url: img.url,
+            seed: img.seed || uid(),
+            width: img.width,
+            height: img.height,
+            revisedPrompt: img.revisedPrompt || "",
+            createdAt: Date.now(),
+          };
+          setResults((prev) => [variant, ...prev]);
+          pushHistory([variant]);
+          showToast("변형을 생성했습니다");
+        } catch (err) {
+          console.error(err);
+          showToast(err.message || "변형 생성 실패");
+        }
+      }, [callGenerateApi, pushHistory, showToast]);
+
+      const handleDeleteHistory = useCallback((id) => {
+        setHistory((prev) => {
+          const next = prev.filter((h) => h.id !== id);
+          saveHistory(next);
+          return next;
+        });
+        showToast("삭제되었습니다");
+      }, [showToast]);
+
+      const handleClearAll = useCallback(() => {
+        if (!confirm("모든 갤러리 항목을 삭제할까요?")) return;
+        setHistory([]);
+        saveHistory([]);
+        showToast("갤러리를 비웠습니다");
+      }, [showToast]);
+
+      return (
+        <div className="min-h-screen">
+          <Header />
+          <Hero />
+          <PromptSection
+            prompt={prompt} setPrompt={setPrompt}
+            selectedStyle={selectedStyle} setSelectedStyle={setSelectedStyle}
+            selectedMood={selectedMood} setSelectedMood={setSelectedMood}
+            ratio={ratio} setRatio={setRatio}
+            count={count} setCount={setCount}
+            colorMode={colorMode} setColorMode={setColorMode}
+            onGenerate={handleGenerate}
+            isGenerating={isGenerating}
+          />
+          <ResultGrid
+            results={results}
+            isGenerating={isGenerating}
+            count={count}
+            ratio={ratio}
+            onOpen={setLightboxItem}
+            onRevariation={handleRevariation}
+            onToast={showToast}
+          />
+          <Gallery
+            history={history}
+            onOpen={setLightboxItem}
+            onDelete={handleDeleteHistory}
+            onClearAll={handleClearAll}
+          />
+          <Footer />
+          <Lightbox item={lightboxItem} onClose={() => setLightboxItem(null)} onToast={showToast} />
+          <Toast visible={toast.visible} message={toast.message} />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
