@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 별명 생성기</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --violet: #8B5CF6;
+      --violet-hover: #7C3AED;
+      --violet-soft: rgba(139,92,246,0.14);
+    }
+    html, body {
+      background: #000;
+      color: #fff;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      letter-spacing: -0.01em;
+    }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-up { animation: fadeUp 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.8s linear infinite; }
+
+    textarea:focus, input:focus { outline: none; }
+    .field:focus-within { border-color: rgba(139,92,246,0.5); }
+
+    .btn-primary {
+      background: var(--violet);
+      color: #fff;
+      transition: background 0.18s ease, transform 0.1s ease;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--violet-hover); }
+    .btn-primary:active:not(:disabled) { transform: translateY(1px); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .segmented {
+      display: inline-flex;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 999px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .segmented > button {
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.6);
+      transition: background 0.18s ease, color 0.18s ease;
+      white-space: nowrap;
+    }
+    .segmented > button:hover:not(.active) { color: #fff; }
+    .segmented > button.active {
+      background: var(--violet);
+      color: #fff;
+    }
+
+    .chip {
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.03);
+      color: rgba(255,255,255,0.75);
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    }
+    .chip:hover:not(.active) { background: rgba(255,255,255,0.08); color: #fff; }
+    .chip.active {
+      background: var(--violet-soft);
+      border-color: rgba(139,92,246,0.55);
+      color: #E3D7FF;
+    }
+
+    .page { max-width: 640px; margin-left: auto; margin-right: auto; }
+    .hairline { height: 1px; background: rgba(255,255,255,0.08); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ========================================
+    // Constants
+    // ========================================
+    const INTERESTS = ['음악','영화','게임','코딩','여행','요리','독서','운동','디자인','커피'];
+    const TONES = ['귀여운','시크한','웃긴','신비로운','중2병'];
+    const FAV_KEY = 'nickname-favorites-v1';
+
+    // ========================================
+    // Primitives
+    // ========================================
+    function Segmented({ value, onChange, options }) {
+      return (
+        <div className="segmented">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => onChange(o.value)}
+              className={value === o.value ? 'active' : ''}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    function Chip({ active, onClick, children }) {
+      return (
+        <button
+          type="button"
+          onClick={onClick}
+          className={`chip ${active ? 'active' : ''}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Toast({ message, show }) {
+      return (
+        <div
+          className={`fixed left-1/2 -translate-x-1/2 bottom-8 z-50 transition-all duration-200 ${
+            show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
+          }`}
+        >
+          <div className="px-4 py-2 rounded-full bg-white/10 border border-white/15 backdrop-blur-xl text-sm">
+            {message}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Header
+    // ========================================
+    function Header() {
+      return (
+        <header className="page px-6 pt-8 pb-4 flex items-center gap-2.5">
+          <div className="w-5 h-5 rounded-full" style={{ background: 'var(--violet)' }}></div>
+          <span className="text-[15px] font-semibold tracking-tight">nickname.ai</span>
+        </header>
+      );
+    }
+
+    // ========================================
+    // Form
+    // ========================================
+    function Form({ onSubmit, loading }) {
+      const [name, setName] = useState('');
+      const [personality, setPersonality] = useState('');
+      const [interests, setInterests] = useState(['코딩']);
+      const [tone, setTone] = useState('시크한');
+      const [language, setLanguage] = useState('한국어');
+      const [count, setCount] = useState(5);
+
+      const toggle = (t) =>
+        setInterests((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]);
+
+      const submit = () => {
+        onSubmit({ name: name.trim(), personality: personality.trim(), interests, tone, language, count });
+      };
+
+      return (
+        <section className="page px-6 mt-4">
+          <div className="flex flex-col gap-5">
+            <div className="field flex flex-col bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 transition">
+              <label className="text-[11px] uppercase tracking-widest text-white/45 mb-1">이름</label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="민준, Henry 등"
+                className="bg-transparent text-[15px] placeholder:text-white/25"
+              />
+            </div>
+
+            <div className="field flex flex-col bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 transition">
+              <label className="text-[11px] uppercase tracking-widest text-white/45 mb-1">특징</label>
+              <textarea
+                rows={2}
+                value={personality}
+                onChange={(e) => setPersonality(e.target.value)}
+                placeholder="조용하고 책을 많이 읽음, 고양이 키움"
+                className="bg-transparent text-[15px] placeholder:text-white/25 resize-none"
+              />
+            </div>
+
+            <div>
+              <div className="text-[11px] uppercase tracking-widest text-white/45 mb-2">관심사</div>
+              <div className="flex flex-wrap gap-2">
+                {INTERESTS.map((t) => (
+                  <Chip key={t} active={interests.includes(t)} onClick={() => toggle(t)}>{t}</Chip>
+                ))}
+              </div>
+            </div>
+
+            <div className="hairline"></div>
+
+            <Row label="톤">
+              <Segmented
+                value={tone}
+                onChange={setTone}
+                options={TONES.map((t) => ({ value: t, label: t }))}
+              />
+            </Row>
+            <Row label="언어">
+              <Segmented
+                value={language}
+                onChange={setLanguage}
+                options={[
+                  { value: '한국어', label: '한국어' },
+                  { value: '영어',   label: 'English' },
+                  { value: '혼합',   label: '혼합' },
+                ]}
+              />
+            </Row>
+            <Row label="개수">
+              <Segmented
+                value={count}
+                onChange={setCount}
+                options={[3, 5, 8].map((n) => ({ value: n, label: String(n) }))}
+              />
+            </Row>
+
+            <button
+              type="button"
+              onClick={submit}
+              disabled={loading || interests.length === 0}
+              className="btn-primary w-full py-3.5 rounded-full text-[15px] font-semibold mt-2 inline-flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white spin inline-block"></span>
+                  생성 중…
+                </>
+              ) : '별명 생성'}
+            </button>
+          </div>
+        </section>
+      );
+    }
+
+    function Row({ label, children }) {
+      return (
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <span className="text-[13px] text-white/70">{label}</span>
+          {children}
+        </div>
+      );
+    }
+
+    // ========================================
+    // Results
+    // ========================================
+    function Results({ results, favorites, onCopy, onFav, onRemix, onRegenerate, loading }) {
+      if (loading) {
+        return (
+          <section className="page px-6 mt-12">
+            <div className="text-[13px] text-white/50 mb-3">생성 중…</div>
+            <div className="flex flex-col gap-2">
+              {[0,1,2].map((i) => (
+                <div key={i} className="h-16 rounded-2xl bg-white/[0.03] border border-white/10"></div>
+              ))}
+            </div>
+          </section>
+        );
+      }
+
+      if (!results || results.length === 0) return null;
+
+      return (
+        <section className="page px-6 mt-12">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[13px] text-white/50">추천 {results.length}개</div>
+            <button onClick={onRegenerate} className="text-[12px] text-white/50 hover:text-white transition">
+              다시 생성
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {results.map((item, i) => (
+              <ResultRow
+                key={item.id}
+                item={item}
+                index={i}
+                isFav={favorites.some((f) => f.nickname === item.nickname)}
+                onCopy={onCopy}
+                onFav={onFav}
+                onRemix={onRemix}
+              />
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    function ResultRow({ item, index, isFav, onCopy, onFav, onRemix }) {
+      return (
+        <div
+          className="fade-up group flex items-center justify-between gap-4 bg-white/[0.03] border border-white/10 rounded-2xl px-5 py-4 hover:bg-white/[0.05] transition"
+          style={{ animationDelay: `${index * 40}ms` }}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-[17px] font-semibold tracking-tight truncate">{item.nickname}</div>
+            <div className="text-[13px] text-white/50 mt-0.5 truncate">{item.meaning}</div>
+          </div>
+          <div className="shrink-0 flex items-center gap-1">
+            <IconBtn title="복사" onClick={() => onCopy(item)}>⎘</IconBtn>
+            <IconBtn title="즐겨찾기" onClick={() => onFav(item)} active={isFav}>
+              {isFav ? '♥' : '♡'}
+            </IconBtn>
+            <IconBtn title="변형" onClick={() => onRemix(item)}>↻</IconBtn>
+          </div>
+        </div>
+      );
+    }
+
+    function IconBtn({ onClick, title, children, active }) {
+      return (
+        <button
+          type="button"
+          title={title}
+          onClick={onClick}
+          className={`w-8 h-8 rounded-full text-sm transition ${
+            active
+              ? 'text-white'
+              : 'text-white/55 hover:text-white hover:bg-white/5'
+          }`}
+          style={active ? { background: 'var(--violet)' } : {}}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    // ========================================
+    // Favorites
+    // ========================================
+    function Favorites({ items, onRemove, onClear, onCopy }) {
+      if (!items || items.length === 0) return null;
+      return (
+        <section className="page px-6 mt-14 mb-20">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[13px] text-white/50">별명첩 {items.length}개</div>
+            <button onClick={onClear} className="text-[12px] text-white/50 hover:text-white transition">
+              비우기
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {items.map((it) => (
+              <div
+                key={it.id || it.nickname}
+                className="flex items-center justify-between gap-4 bg-white/[0.03] border border-white/10 rounded-2xl px-5 py-3.5 hover:bg-white/[0.05] transition"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-semibold truncate">{it.nickname}</div>
+                  <div className="text-[12px] text-white/45 truncate">{it.meaning}</div>
+                </div>
+                <div className="shrink-0 flex items-center gap-1">
+                  <IconBtn title="복사" onClick={() => onCopy(it)}>⎘</IconBtn>
+                  <IconBtn title="삭제" onClick={() => onRemove(it)}>✕</IconBtn>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    // ========================================
+    // App
+    // ========================================
+    function App() {
+      const [loading, setLoading] = useState(false);
+      const [results, setResults] = useState([]);
+      const [favorites, setFavorites] = useState(() => {
+        try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); }
+        catch { return []; }
+      });
+      const [toast, setToast] = useState({ show: false, msg: '' });
+      const [lastConfig, setLastConfig] = useState(null);
+      const toastRef = useRef(null);
+
+      useEffect(() => {
+        try { localStorage.setItem(FAV_KEY, JSON.stringify(favorites)); } catch {}
+      }, [favorites]);
+
+      const showToast = useCallback((msg) => {
+        setToast({ show: true, msg });
+        if (toastRef.current) clearTimeout(toastRef.current);
+        toastRef.current = setTimeout(() => setToast({ show: false, msg: '' }), 1800);
+      }, []);
+
+      const callGenerateApi = useCallback(async (cfg) => {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: cfg.name || '',
+            personality: cfg.personality || '',
+            interests: Array.isArray(cfg.interests) ? cfg.interests : [],
+            tone: cfg.tone,
+            language: cfg.language,
+            count: cfg.count,
+          }),
+        });
+        const json = await res.json().catch(() => ({ success: false, message: '응답 해석 실패' }));
+        if (!res.ok || !json.success) {
+          throw new Error(json.message || `API 오류 (${res.status})`);
+        }
+        return (json.data.items || []).map((it) => ({
+          ...it,
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        }));
+      }, []);
+
+      const run = useCallback(async (cfg) => {
+        setLoading(true);
+        setLastConfig(cfg);
+        try {
+          const out = await callGenerateApi(cfg);
+          if (out.length === 0) throw new Error('생성된 별명이 없어요');
+          setResults(out);
+        } catch (err) {
+          console.error(err);
+          showToast(err.message || '생성 실패');
+        } finally {
+          setLoading(false);
+        }
+      }, [callGenerateApi, showToast]);
+
+      const handleSubmit = useCallback((cfg) => {
+        if (!cfg.interests || cfg.interests.length === 0) {
+          showToast('관심사를 1개 이상 선택해 주세요');
+          return;
+        }
+        run(cfg);
+      }, [run, showToast]);
+
+      const handleCopy = useCallback(async (item) => {
+        try {
+          await navigator.clipboard.writeText(item.nickname);
+          showToast('복사됨');
+        } catch { showToast('복사 실패'); }
+      }, [showToast]);
+
+      const handleFav = useCallback((item) => {
+        setFavorites((prev) => {
+          const exists = prev.some((f) => f.nickname === item.nickname);
+          if (exists) {
+            showToast('별명첩에서 제거됨');
+            return prev.filter((f) => f.nickname !== item.nickname);
+          }
+          showToast('별명첩에 저장됨');
+          return [{ ...item }, ...prev];
+        });
+      }, [showToast]);
+
+      const handleRemoveFav = useCallback((item) => {
+        setFavorites((prev) => prev.filter((f) => f.nickname !== item.nickname));
+        showToast('삭제됨');
+      }, [showToast]);
+
+      const handleClearFav = useCallback(() => {
+        if (!confirm('별명첩을 전부 비울까요?')) return;
+        setFavorites([]);
+        showToast('비웠어요');
+      }, [showToast]);
+
+      const handleRemix = useCallback(async (item) => {
+        if (!lastConfig) return;
+        try {
+          const variants = await callGenerateApi({
+            ...lastConfig,
+            count: 1,
+            tone: item.tone,
+            language: item.language === '영어' ? '영어' : lastConfig.language,
+          });
+          if (variants.length > 0) {
+            setResults((prev) => prev.map((r) => r.id === item.id ? variants[0] : r));
+            showToast('변형됨');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast(err.message || '변형 실패');
+        }
+      }, [lastConfig, callGenerateApi, showToast]);
+
+      return (
+        <div className="min-h-screen">
+          <Header />
+          <section className="page px-6 pt-10 pb-6">
+            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
+              AI 별명 생성기
+            </h1>
+            <p className="mt-2 text-[15px] text-white/55">
+              몇 가지 정보를 알려주면 어울리는 별명을 만들어 드려요.
+            </p>
+          </section>
+          <Form onSubmit={handleSubmit} loading={loading} />
+          <Results
+            results={results}
+            favorites={favorites}
+            onCopy={handleCopy}
+            onFav={handleFav}
+            onRemix={handleRemix}
+            onRegenerate={() => lastConfig && run(lastConfig)}
+            loading={loading}
+          />
+          <Favorites
+            items={favorites}
+            onRemove={handleRemoveFav}
+            onClear={handleClearFav}
+            onCopy={handleCopy}
+          />
+          <Toast show={toast.show} message={toast.msg} />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
