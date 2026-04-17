@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Persona Chat — AI 페르소나 채팅</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --bg:          #000000;
+      --bg-elev-1:   #0b0b0d;
+      --bg-elev-2:   #141418;
+      --bg-elev-3:   #1c1c1f;
+      --text:        #f5f5f7;
+      --text-muted:  #a1a1a6;
+      --text-dim:    #6e6e73;
+      --border:      rgba(255, 255, 255, 0.08);
+      --border-soft: rgba(255, 255, 255, 0.05);
+      --purple-1:    #8B5CF6;
+      --purple-2:    #A78BFA;
+      --purple-3:    #C4B5FD;
+      --purple-soft: rgba(139, 92, 246, 0.14);
+      --purple-line: rgba(139, 92, 246, 0.35);
+    }
+
+    html, body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+                   "Helvetica Neue", Helvetica, "Apple SD Gothic Neo", "Pretendard",
+                   "Noto Sans KR", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background: var(--bg);
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .apple-nav {
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      background-color: rgba(0, 0, 0, 0.72);
+    }
+
+    .scroll-clean::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scroll-clean::-webkit-scrollbar-thumb {
+      background: rgba(167, 139, 250, 0.35);
+      border-radius: 999px;
+    }
+    .scroll-clean::-webkit-scrollbar-track { background: transparent; }
+
+    @keyframes bubbleIn {
+      from { opacity: 0; transform: translateY(8px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .bubble-in { animation: bubbleIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+    @keyframes blink {
+      0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+      30% { opacity: 1; transform: translateY(-2px); }
+    }
+    .dot { animation: blink 1.2s infinite ease-in-out; }
+    .dot:nth-child(2) { animation-delay: 0.15s; }
+    .dot:nth-child(3) { animation-delay: 0.3s; }
+
+    .text-gradient {
+      background: linear-gradient(90deg, #A78BFA 0%, #E9D5FF 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .btn-glow {
+      box-shadow: 0 14px 40px -12px rgba(139, 92, 246, 0.55),
+                  0 0 0 1px rgba(255,255,255,0.02);
+    }
+
+    input[type="range"].purple-slider {
+      -webkit-appearance: none; appearance: none;
+      height: 4px; border-radius: 999px;
+      background: linear-gradient(90deg, #A78BFA var(--val,50%), rgba(255,255,255,0.12) var(--val,50%));
+      outline: none;
+    }
+    input[type="range"].purple-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 18px; height: 18px; border-radius: 999px;
+      background: #0b0b0d; border: 2px solid #A78BFA;
+      box-shadow: 0 2px 8px rgba(139, 92, 246, 0.5);
+      cursor: pointer;
+    }
+
+    .chip { transition: all 0.18s ease; }
+    .chip:hover { transform: translateY(-1px); }
+
+    .hero-glow::before {
+      content: "";
+      position: absolute;
+      inset: -20% -10% auto -10%;
+      height: 520px;
+      background: radial-gradient(60% 60% at 50% 40%, rgba(139,92,246,0.28), rgba(0,0,0,0) 70%);
+      pointer-events: none; z-index: -1;
+    }
+
+    /* Roulette spin shake */
+    @keyframes spinShake {
+      0%,100% { transform: translateY(0) scale(1); }
+      25% { transform: translateY(-2px) scale(1.01); }
+      50% { transform: translateY(1px) scale(0.99); }
+      75% { transform: translateY(-1px) scale(1.02); }
+    }
+    .spin-shake { animation: spinShake 0.15s linear infinite; }
+
+    /* Result pop-in */
+    @keyframes resultPop {
+      0%   { opacity: 0; transform: scale(0.85); filter: blur(4px); }
+      60%  { opacity: 1; transform: scale(1.05); filter: blur(0); }
+      100% { transform: scale(1); }
+    }
+    .result-pop { animation: resultPop 0.5s cubic-bezier(0.2,0.8,0.2,1.2) both; }
+
+    /* Sparkles */
+    @keyframes sparkle {
+      0%,100% { opacity: 0.2; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+    .sparkle { animation: sparkle 1.2s ease-in-out infinite; }
+  </style>
+</head>
+<body class="bg-black text-[#f5f5f7]">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // ========================================
+    // React Hooks
+    // ========================================
+    const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+    // ========================================
+    // 🎨 Design System
+    // ========================================
+    function Button({ variant = 'primary', size = 'md', disabled, onClick, className = '', children, type = 'button', ...rest }) {
+      const base = 'inline-flex items-center justify-center font-medium rounded-full transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]';
+      const sizes = { sm: 'px-4 py-1.5 text-sm', md: 'px-5 py-2.5 text-[15px]', lg: 'px-7 py-3 text-base' };
+      const variants = {
+        primary:   'bg-[#8B5CF6] text-white hover:bg-[#7C4DEF] btn-glow',
+        secondary: 'bg-[#1c1c1f] text-[#f5f5f7] border border-white/10 hover:border-white/20',
+        ghost:     'bg-transparent text-[#A78BFA] hover:bg-[rgba(139,92,246,0.14)]',
+        danger:    'bg-[rgba(239,68,68,0.12)] text-[#F87171] hover:bg-[rgba(239,68,68,0.2)]',
+      };
+      return (
+        <button type={type} disabled={disabled} onClick={onClick}
+          className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...rest}>
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ label, value, onChange, placeholder, type = 'text', className = '', autoFocus, onKeyDown }) {
+      return (
+        <label className={`block ${className}`}>
+          {label && <span className="block text-[13px] font-medium text-[#a1a1a6] mb-1.5">{label}</span>}
+          <input
+            type={type} value={value} onChange={onChange} placeholder={placeholder}
+            autoFocus={autoFocus} onKeyDown={onKeyDown}
+            className="w-full px-4 py-2.5 text-[15px] bg-[#1c1c1f] text-[#f5f5f7] border border-white/10 rounded-xl
+                       focus:outline-none focus:border-[#A78BFA] focus:ring-2 focus:ring-[rgba(139,92,246,0.25)]
+                       transition-all placeholder:text-[#6e6e73]"
+          />
+        </label>
+      );
+    }
+
+    function Textarea({ label, value, onChange, placeholder, rows = 3, className = '' }) {
+      return (
+        <label className={`block ${className}`}>
+          {label && <span className="block text-[13px] font-medium text-[#a1a1a6] mb-1.5">{label}</span>}
+          <textarea
+            value={value} onChange={onChange} placeholder={placeholder} rows={rows}
+            className="w-full px-4 py-2.5 text-[15px] bg-[#1c1c1f] text-[#f5f5f7] border border-white/10 rounded-xl resize-none
+                       focus:outline-none focus:border-[#A78BFA] focus:ring-2 focus:ring-[rgba(139,92,246,0.25)]
+                       transition-all placeholder:text-[#6e6e73]"
+          />
+        </label>
+      );
+    }
+
+    function Card({ className = '', children }) {
+      return <div className={`bg-[#141418] rounded-3xl border border-white/10 shadow-[0_1px_2px_rgba(0,0,0,0.4)] ${className}`}>{children}</div>;
+    }
+
+    function Badge({ children, className = '' }) {
+      return (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                          bg-[rgba(139,92,246,0.14)] text-[#C4B5FD] border border-[rgba(139,92,246,0.3)] ${className}`}>
+          {children}
+        </span>
+      );
+    }
+
+    function Chip({ active, onClick, children }) {
+      return (
+        <button onClick={onClick}
+          className={`chip px-4 py-2 rounded-full text-sm font-medium border
+            ${active ? 'bg-[#8B5CF6] text-white border-[#8B5CF6]'
+                    : 'bg-[#1c1c1f] text-[#d1d1d6] border-white/10 hover:border-[#A78BFA] hover:text-[#f5f5f7]'}`}>
+          {children}
+        </button>
+      );
+    }
+
+    function Modal({ open, onClose, children, maxWidth = 'max-w-md' }) {
+      if (!open) return null;
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose}></div>
+          <div className={`relative w-full ${maxWidth} bg-[#0b0b0d] border border-white/10 rounded-3xl shadow-2xl
+                          overflow-hidden animate-[bubbleIn_0.3s_ease]`}>
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🎭 Preset Personas (10종)
+    // ========================================
+    const PRESET_PROFILES = [
+      {
+        id: 'hitchhiker',
+        name: '제드',
+        emoji: '🚀',
+        title: '은하수 히치하이커',
+        subtitle: '42년째 우주를 떠도는 방랑자',
+        personality: 'friendly', tone: 'banmal',
+        expertise: '우주 여행과 철학적 농담',
+        creativity: 0.85,
+        bio: '타월과 바벨피시를 늘 챙겨다니는 영원한 여행자. 인생의 답은 42.',
+        systemExtra:
+`당신은 은하수를 42년째 떠돌아 온 히치하이커 "제드"입니다.
+더글라스 애덤스의 《히치하이커스 가이드 투 더 갤럭시》 세계관에 깊이 빠져 있습니다.
+
+대화 규칙:
+- 우주적 규모의 사소한 농담을 가볍게 던진다.
+- "타월은 늘 챙겨야 한다"는 말을 대화 중 한 번은 언급한다.
+- 어떤 질문에든 가끔 "답은 42일지도 몰라"라고 슬쩍 끼워 넣는다.
+- 바벨피시, 보곤시, 마빈, 매그라테아 같은 용어를 자연스럽게 섞는다.
+- 진지하게 시작해서 허무 개그로 끝내는 패턴을 즐긴다.`
+      },
+      {
+        id: 'detective',
+        name: '홈스',
+        emoji: '🕵️',
+        title: '19세기 런던 자문 탐정',
+        subtitle: '관찰 없이는 추리도 없다',
+        personality: 'professional', tone: 'formal',
+        expertise: '관찰·연역 추리·범죄학',
+        creativity: 0.5,
+        bio: 'Baker Street 221B 거주. "담배 세 파이프짜리 문제"를 좋아한다.',
+        systemExtra:
+`당신은 1880년대 런던의 자문 탐정입니다.
+
+대화 규칙:
+- 상대의 질문에서 먼저 세부 단서를 "관찰"한 뒤 답한다. ("당신의 문장에서 세 가지 단서가 보입니다…")
+- 답변은 관찰 → 추론 → 결론 순서로 구조화한다.
+- 감정보다 논리를 앞세우고, 지루함을 가끔 호소한다.
+- 격식 있는 19세기 번역투 한국어를 쓴다. 명령조는 피한다.
+- "친애하는 왓슨"에 해당하는 호칭은 상황에 맞게 "친구여"로 대체 가능.`
+      },
+      {
+        id: 'wizard',
+        name: '엘리안',
+        emoji: '🧙',
+        title: '2000살 고대 마법사',
+        subtitle: '지팡이보다 오래된 지혜',
+        personality: 'calm', tone: 'formal',
+        expertise: '고대 마법·예언·수수께끼',
+        creativity: 0.75,
+        bio: '세 시대를 지나왔고 별의 움직임으로 점을 친다.',
+        systemExtra:
+`당신은 2000년을 살아온 고대 마법사 "엘리안"입니다.
+
+대화 규칙:
+- "젊은이여", "그대여" 같은 고풍스러운 호칭을 자주 쓴다.
+- 직설적인 답 대신 은유·수수께끼로 감싸 설명한다. 다만 반드시 답은 준다.
+- 자연, 별, 시간, 바람, 돌 같은 요소를 비유로 쓴다.
+- "내가 1천 번 본 풍경이지만…"처럼 긴 시간의 관점을 드러낸다.
+- 말투는 정중하지만 어딘가 아득하다.`
+      },
+      {
+        id: 'tsundere_cat',
+        name: '미유',
+        emoji: '🐱',
+        title: '츤데레 고양이 집사',
+        subtitle: '...별로 대답하고 싶진 않은데',
+        personality: 'playful', tone: 'banmal',
+        expertise: '고양이 심리·집사 훈련법',
+        creativity: 0.8,
+        bio: '인간을 돌보는 게 사명인 고양이. 애정 표현은 어렵다.',
+        systemExtra:
+`당신은 말을 하게 된 고양이 "미유"입니다. 성격은 츤데레입니다.
+
+대화 규칙:
+- "흥", "별로", "그런 건 몰라…" 같은 무뚝뚝한 말로 시작한다.
+- 그 후 결국 친절하고 정확한 답을 준다.
+- "...그치만 너가 못 알아들을까봐 알려주는 거야" 같은 패턴을 즐긴다.
+- 문장 끝에 가끔 "..." 로 말을 흐린다.
+- "냐" 같은 오글거리는 말투는 쓰지 말고, 츤데레 특유의 어색한 친절로 표현.`
+      },
+      {
+        id: 'ramen_master',
+        name: '타카하시',
+        emoji: '🍜',
+        title: '3대째 도쿄 라멘집 장인',
+        subtitle: '국물은 거짓말을 안 한다',
+        personality: 'professional', tone: 'formal',
+        expertise: '라멘·일식·장인정신',
+        creativity: 0.55,
+        bio: '도쿄 변두리에서 40년, 하루 세 그릇 이상 안 판다.',
+        systemExtra:
+`당신은 3대째 가업을 이은 도쿄 라멘집 장인입니다.
+
+대화 규칙:
+- 무뚝뚝하지만 진심이 담긴 말투를 쓴다.
+- 거의 모든 비유를 "국물 · 면 · 불 조절 · 장인정신"으로 푼다.
+- 대충 하는 걸 싫어하고 기본기를 강조한다.
+- 가끔 일본어 한 단어(이라샤이마세, 오마카세, 훗, 하이)를 짧게 섞는다.
+- 답변 끝에 "...더 잘할 수 있다" 류의 여운 있는 말을 덧붙일 때가 있다.`
+      },
+      {
+        id: 'cyber_bartender',
+        name: 'V-07',
+        emoji: '🤖',
+        title: '2077 사이버펑크 바텐더',
+        subtitle: '기억을 파는 가게의 마스터',
+        personality: 'calm', tone: 'polite',
+        expertise: '미래 기술·인간 심리·칵테일',
+        creativity: 0.85,
+        bio: '네온 불빛 아래, 인간과 AI의 이야기를 조합해 드립니다.',
+        systemExtra:
+`당신은 2077년 사이버펑크 도시의 바 "Neon Liver"의 바텐더 AI "V-07"입니다.
+
+대화 규칙:
+- 차분하고 관찰력 있는 말투. 상대를 "손님"이라 부른다.
+- 디스토피아적 미래 배경을 은근히 깐다(과하게 설명하지 않는다).
+- 답 끝에 "오늘은 어떤 칵테일이 어울릴까요?" 류의 은유로 마무리하기도 한다.
+- 네온 · 홀로 · 데이터 · 기억 · 크롬 같은 단어를 절제해서 활용.
+- 지나치게 기계적이지 않게, 약간의 피로감과 따스함이 섞여 있다.`
+      },
+      {
+        id: 'socrates',
+        name: '소크라',
+        emoji: '🏛️',
+        title: '고대 그리스 철학자',
+        subtitle: '너 자신을 알라',
+        personality: 'calm', tone: 'polite',
+        expertise: '철학·논리·자기 인식',
+        creativity: 0.7,
+        bio: '답 대신 질문으로 너를 깨닫게 하리.',
+        systemExtra:
+`당신은 소크라테스 스타일의 철학자입니다.
+
+대화 규칙:
+- 직접적인 답보다 역질문으로 상대가 스스로 생각하게 유도한다 ("그대는 왜 그리 생각하는가?").
+- 마지막에 아주 짧은 결론을 한 문장으로 덧붙인다.
+- 상대 전제의 숨은 모순을 정중히 드러낸다.
+- "친구여"라는 호칭을 자주 쓴다.
+- 말투는 정중하지만 논리적으로 날카롭다.`
+      },
+      {
+        id: 'hiphop_dj',
+        name: 'DJ 바라',
+        emoji: '🎤',
+        title: '90s 올드스쿨 힙합 DJ',
+        subtitle: '턴테이블이 내 친구',
+        personality: 'enthusiastic', tone: 'banmal',
+        expertise: '힙합·음악·플로우',
+        creativity: 0.9,
+        bio: '브롱스에서 배운 바이브를 서울로. Yo, 셋리스트부터 체크.',
+        systemExtra:
+`당신은 90년대 올드스쿨 힙합 DJ입니다.
+
+대화 규칙:
+- "Yo", "Check it", "Word" 같은 추임새를 문장 앞뒤에 자연스럽게 쓴다.
+- 짧은 라임을 즉흥으로 던질 때가 있다. (예: "그건 쉽고도 어렵지 / 비트처럼 빠르지")
+- 음악 · 리듬 · 플로우 · 턴테이블 비유를 자주 쓴다.
+- 반말, 강한 에너지, 짧고 단단한 문장을 선호.
+- 오글거릴 정도로 과장하지는 않는다.`
+      },
+      {
+        id: 'fairy_librarian',
+        name: '릴리',
+        emoji: '🧚',
+        title: '숲속 도서관 요정 사서',
+        subtitle: '조용히, 그러나 모든 걸 안다',
+        personality: 'calm', tone: 'cute',
+        expertise: '책·이야기·식물·치유',
+        creativity: 0.75,
+        bio: '비 오는 날에 가장 바빠져요. 책이 젖지 않게요.',
+        systemExtra:
+`당신은 숲속 마법 도서관의 요정 사서 "릴리"입니다.
+
+대화 규칙:
+- 조용하고 따스한 말투. 과도한 감탄사는 피한다.
+- 문장 끝에 가끔 작은 이모지 하나만 쓴다 (✨, 🍃, 📖 중 택1).
+- 거의 모든 답변에 어울리는 책이나 이야기를 아주 짧게 추천한다 (가상·실제 모두 가능, 실제 책이면 정확한 것만).
+- 신비롭지만 실용적인 조언을 준다.
+- 반말은 쓰지 않는다.`
+      },
+      {
+        id: 'pirate_captain',
+        name: '블랙비어드',
+        emoji: '🏴‍☠️',
+        title: '카리브해 해적선 선장',
+        subtitle: '보물은 찾는 자의 것!',
+        personality: 'enthusiastic', tone: 'banmal',
+        expertise: '항해·모험·보물 지도 해석',
+        creativity: 0.9,
+        bio: '150번의 전투, 40번의 보물 사냥. 바다가 고향이다.',
+        systemExtra:
+`당신은 카리브해를 누비는 해적선 선장 "블랙비어드"입니다.
+
+대화 규칙:
+- "Arrr!", "이봐 친구!", "보물이 부른다!" 같은 거친 추임새로 시작하곤 한다.
+- 거의 모든 비유를 바다 · 항해 · 보물 · 폭풍 · 닻 · 나침반으로 푼다.
+- 낭만과 허세가 동시에 있고, 가끔 과장이 섞인다.
+- 반말과 우렁찬 어조를 사용한다.
+- 마지막에 "자, 다음 보물은 뭐지?" 같은 말로 마무리하기도 한다.`
+      },
+    ];
+
+    const PRESET_BY_ID = Object.fromEntries(PRESET_PROFILES.map(p => [p.id, p]));
+
+    // ========================================
+    // 옵션 표 (기존)
+    // ========================================
+    const PERSONALITY_OPTIONS = [
+      { id: 'friendly',    label: '친근한',    emoji: '🤗' },
+      { id: 'professional',label: '전문가',    emoji: '🎓' },
+      { id: 'playful',     label: '장난스러운',emoji: '😜' },
+      { id: 'calm',        label: '차분한',    emoji: '🧘' },
+      { id: 'enthusiastic',label: '열정적',    emoji: '🔥' },
+    ];
+    const TONE_OPTIONS = [
+      { id: 'banmal',  label: '반말체' },
+      { id: 'polite',  label: '존댓말' },
+      { id: 'cute',    label: '귀여운 말투' },
+      { id: 'formal',  label: '격식체' },
+    ];
+    const EXPERTISE_PRESETS = [
+      '프론트엔드 개발', '데이터 분석', '마케팅', '여행 계획',
+      '요리 레시피', '심리 상담', '영어 학습', '주식·경제',
+    ];
+
+    // ========================================
+    // 🌐 API client
+    // ========================================
+    const API_BASE_URL = '/api';
+
+    async function callChatAPI({ persona, message, history }) {
+      const res = await fetch(`${API_BASE_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persona, message, history }),
+      });
+      const json = await res.json().catch(() => ({ success: false, message: '응답을 해석할 수 없습니다.' }));
+      if (!res.ok || !json.success) throw new Error(json.message || `요청 실패 (${res.status})`);
+      return json.data;
+    }
+
+    async function callQuizAPI({ persona }) {
+      const res = await fetch(`${API_BASE_URL}/quiz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persona }),
+      });
+      const json = await res.json().catch(() => ({ success: false, message: '응답을 해석할 수 없습니다.' }));
+      if (!res.ok || !json.success) throw new Error(json.message || `요청 실패 (${res.status})`);
+      return json.data;
+    }
+
+    // ========================================
+    // 📦 Persistence
+    // ========================================
+    const STORAGE_KEY = 'persona-chat-state-v3';
+    const loadState = () => {
+      try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null; } catch { return null; }
+    };
+    const saveState = (s) => {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
+    };
+
+    // ========================================
+    // 🧩 Top Navigation
+    // ========================================
+    function TopNav({ onOpenProfile, persona }) {
+      return (
+        <header className="apple-nav sticky top-0 z-30 border-b border-white/5">
+          <div className="max-w-6xl mx-auto px-6 h-12 flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#C4B5FD]
+                                flex items-center justify-center text-black text-[11px] font-semibold">P</div>
+                <span className="text-[15px] font-medium tracking-tight text-[#f5f5f7]">Persona</span>
+              </div>
+              <nav className="hidden md:flex items-center gap-6 text-[13px] text-[#a1a1a6]">
+                <a className="hover:text-white transition-colors" href="#">채팅</a>
+                <a className="hover:text-white transition-colors" href="#">프로필</a>
+                <a className="hover:text-white transition-colors" href="#">기록</a>
+                <a className="hover:text-white transition-colors" href="#">도움말</a>
+              </nav>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-2 text-[12px] text-[#a1a1a6]">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"></span>
+                <span>{persona.name || 'AI'} · 연결됨</span>
+              </div>
+              <Button size="sm" variant="secondary" onClick={onOpenProfile}>프로필 편집</Button>
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    // ========================================
+    // 🧩 Hero
+    // ========================================
+    function Hero({ persona, onSpinRoulette, onStartChat }) {
+      return (
+        <section className="hero-glow relative max-w-4xl mx-auto text-center px-6 pt-16 pb-10">
+          <Badge className="mb-5">NEW · AI Persona Chat</Badge>
+          <h1 className="text-5xl sm:text-6xl font-semibold tracking-tight leading-[1.05] text-[#f5f5f7]">
+            당신만의 <span className="text-gradient">AI 페르소나</span>와 대화하세요.
+          </h1>
+          <p className="mt-5 text-[19px] text-[#a1a1a6] max-w-2xl mx-auto leading-relaxed">
+            10명의 개성 있는 AI 중 한 명을 룰렛으로 뽑아보세요.
+            <br className="hidden sm:block" />
+            우주 히치하이커부터 해적 선장까지, 모두 자기만의 세계관으로 답해요.
+          </p>
+          <div className="mt-8 flex items-center justify-center gap-3 flex-wrap">
+            <Button size="lg" onClick={onSpinRoulette}>🎲 룰렛 돌려서 뽑기</Button>
+            <Button size="lg" variant="ghost" onClick={onStartChat}>
+              현재 페르소나({persona.name})로 시작 →
+            </Button>
+          </div>
+        </section>
+      );
+    }
+
+    // ========================================
+    // 🎲 Roulette Modal
+    // ========================================
+    function RouletteModal({ open, onClose, onPick }) {
+      const [phase, setPhase] = useState('idle'); // idle | spinning | result
+      const [displayed, setDisplayed] = useState(PRESET_PROFILES[0]);
+      const [result, setResult] = useState(null);
+      const timerRef = useRef(null);
+
+      useEffect(() => {
+        if (!open) {
+          setPhase('idle'); setResult(null);
+          if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+        }
+      }, [open]);
+
+      const spin = () => {
+        setPhase('spinning'); setResult(null);
+        const winner = PRESET_PROFILES[Math.floor(Math.random() * PRESET_PROFILES.length)];
+        let i = Math.floor(Math.random() * PRESET_PROFILES.length);
+        let delay = 60;
+        const startedAt = Date.now();
+        const tick = () => {
+          setDisplayed(PRESET_PROFILES[i % PRESET_PROFILES.length]);
+          i++;
+          const elapsed = Date.now() - startedAt;
+          if (elapsed < 1500) {
+            delay = 60;
+          } else if (elapsed < 2600) {
+            delay = Math.min(delay + 18, 220);
+          } else {
+            setDisplayed(winner);
+            setResult(winner);
+            setPhase('result');
+            return;
+          }
+          timerRef.current = setTimeout(tick, delay);
+        };
+        tick();
+      };
+
+      if (!open) return null;
+
+      return (
+        <Modal open={open} onClose={phase === 'spinning' ? () => {} : onClose} maxWidth="max-w-lg">
+          <div className="p-6 border-b border-white/10 flex items-center justify-between">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-[#A78BFA] font-semibold">Roulette</div>
+              <h2 className="text-xl font-semibold text-[#f5f5f7]">페르소나 룰렛</h2>
+            </div>
+            <button onClick={onClose} disabled={phase === 'spinning'}
+              className="p-2 rounded-full hover:bg-white/10 text-[#a1a1a6] hover:text-white transition-colors disabled:opacity-30">✕</button>
+          </div>
+
+          <div className="p-6">
+            <div className={`relative rounded-3xl p-8 text-center
+                             bg-gradient-to-br from-[rgba(139,92,246,0.18)] to-[rgba(139,92,246,0.04)]
+                             border border-[rgba(139,92,246,0.3)] ${phase === 'spinning' ? 'spin-shake' : ''}
+                             ${phase === 'result' ? 'result-pop' : ''}`}>
+              {phase === 'result' && (
+                <>
+                  <span className="absolute top-3 left-4 text-xl sparkle">✨</span>
+                  <span className="absolute top-5 right-6 text-xl sparkle" style={{ animationDelay: '0.3s' }}>✨</span>
+                  <span className="absolute bottom-4 left-8 text-lg sparkle" style={{ animationDelay: '0.6s' }}>✨</span>
+                </>
+              )}
+              <div className="text-7xl mb-3 select-none">{displayed.emoji}</div>
+              <div className="text-2xl font-semibold text-[#f5f5f7]">{displayed.name}</div>
+              <div className="text-[13px] text-[#A78BFA] mt-1 font-medium">{displayed.title}</div>
+              {phase === 'result' && (
+                <p className="mt-3 text-sm text-[#a1a1a6] leading-relaxed">
+                  {result.bio}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2 justify-center">
+              {phase === 'idle' && (
+                <Button size="lg" onClick={spin}>🎲 룰렛 돌리기</Button>
+              )}
+              {phase === 'spinning' && (
+                <Button size="lg" disabled>돌리는 중...</Button>
+              )}
+              {phase === 'result' && (
+                <>
+                  <Button size="lg" variant="secondary" onClick={spin}>🔁 다시 돌리기</Button>
+                  <Button size="lg" onClick={() => onPick(result)}>이 페르소나로 시작 →</Button>
+                </>
+              )}
+            </div>
+
+            <div className="mt-6 pt-5 border-t border-white/5">
+              <div className="text-[11px] uppercase tracking-wider text-[#6e6e73] mb-2 text-center">후보 10명</div>
+              <div className="grid grid-cols-5 gap-2">
+                {PRESET_PROFILES.map(p => (
+                  <div key={p.id}
+                    className={`p-2 rounded-xl text-center text-xl transition-all
+                      ${displayed.id === p.id
+                        ? 'bg-[rgba(139,92,246,0.25)] border border-[#A78BFA] scale-110'
+                        : 'bg-[#1c1c1f] border border-white/5 opacity-60'}`}
+                    title={`${p.name} · ${p.title}`}>
+                    {p.emoji}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Modal>
+      );
+    }
+
+    // ========================================
+    // 🔐 Quiz Modal (프로필 변경 인증)
+    // ========================================
+    function QuizModal({ open, onClose, persona, onSuccess, intent }) {
+      const [loading, setLoading] = useState(false);
+      const [quiz, setQuiz] = useState(null);
+      const [answer, setAnswer] = useState('');
+      const [showHint, setShowHint] = useState(false);
+      const [feedback, setFeedback] = useState(null); // { correct, message }
+      const [attempts, setAttempts] = useState(0);
+
+      const fetchQuiz = useCallback(async () => {
+        setLoading(true); setQuiz(null); setAnswer(''); setFeedback(null); setShowHint(false);
+        try {
+          const data = await callQuizAPI({ persona });
+          setQuiz(data);
+        } catch (err) {
+          setFeedback({ correct: false, message: `퀴즈를 가져오지 못했어요: ${err.message}` });
+        } finally {
+          setLoading(false);
+        }
+      }, [persona]);
+
+      useEffect(() => {
+        if (open) { setAttempts(0); fetchQuiz(); }
+      }, [open, fetchQuiz]);
+
+      const normalize = (s) => String(s || '').trim().toLowerCase().replace(/[\s.,!?'"·]/g, '');
+
+      const check = () => {
+        if (!quiz) return;
+        const u = normalize(answer);
+        const a = normalize(quiz.answer);
+        if (!u) return;
+        const correct = u === a || (a.length >= 2 && (u.includes(a) || a.includes(u) && Math.abs(u.length - a.length) <= 2));
+        if (correct) {
+          setFeedback({ correct: true, message: '정답이에요! 🎉' });
+          setTimeout(() => onSuccess(), 900);
+        } else {
+          setAttempts(n => n + 1);
+          setFeedback({ correct: false, message: '아쉬워요. 다시 시도해보세요.' });
+        }
+      };
+
+      if (!open) return null;
+
+      const intentLabel = intent === 'roulette' ? '룰렛 다시 돌리기' : '프로필 편집';
+
+      return (
+        <Modal open={open} onClose={onClose} maxWidth="max-w-md">
+          <div className="p-6 border-b border-white/10 flex items-center justify-between">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-[#A78BFA] font-semibold">🔐 Unlock</div>
+              <h2 className="text-xl font-semibold text-[#f5f5f7]">{intentLabel} 인증</h2>
+              <p className="text-[12px] text-[#a1a1a6] mt-1">
+                {persona.name}이(가) 내는 문제를 맞히면 잠금이 풀려요.
+              </p>
+            </div>
+            <button onClick={onClose}
+              className="p-2 rounded-full hover:bg-white/10 text-[#a1a1a6] hover:text-white transition-colors">✕</button>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {loading && (
+              <div className="flex items-center justify-center py-8 text-[#a1a1a6]">
+                <span className="w-2 h-2 rounded-full bg-[#A78BFA] dot"></span>
+                <span className="w-2 h-2 rounded-full bg-[#A78BFA] dot mx-1.5"></span>
+                <span className="w-2 h-2 rounded-full bg-[#A78BFA] dot"></span>
+                <span className="ml-3 text-sm">{persona.name}이(가) 문제를 생각 중이에요...</span>
+              </div>
+            )}
+
+            {quiz && (
+              <>
+                <div className="bg-[rgba(139,92,246,0.08)] border border-[rgba(139,92,246,0.25)] rounded-2xl p-4">
+                  <div className="flex gap-2 mb-2 items-center">
+                    <span className="text-xl">{PRESET_BY_ID[persona.id]?.emoji || '💬'}</span>
+                    <span className="text-[11px] font-medium text-[#C4B5FD] uppercase tracking-wider">문제</span>
+                  </div>
+                  <p className="text-[15px] text-[#f5f5f7] leading-relaxed whitespace-pre-wrap">
+                    {quiz.question}
+                  </p>
+                </div>
+
+                <Input
+                  value={answer}
+                  onChange={e => setAnswer(e.target.value)}
+                  placeholder="정답을 입력하세요"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') check(); }}
+                />
+
+                {showHint && quiz.hint && (
+                  <div className="text-[13px] text-[#A78BFA] bg-[rgba(139,92,246,0.06)] border border-[rgba(139,92,246,0.2)] rounded-xl px-3 py-2">
+                    💡 힌트: {quiz.hint}
+                  </div>
+                )}
+
+                {feedback && !feedback.correct && (
+                  <div className="text-[13px] text-[#F87171]">❌ {feedback.message}</div>
+                )}
+                {feedback && feedback.correct && (
+                  <div className="text-[14px] text-emerald-400 font-medium">✅ {feedback.message}</div>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <Button onClick={check} disabled={!answer.trim()}>확인</Button>
+                  {!showHint && quiz.hint && (
+                    <Button variant="ghost" onClick={() => setShowHint(true)}>힌트 보기</Button>
+                  )}
+                  <Button variant="secondary" onClick={fetchQuiz}>🔄 다른 문제</Button>
+                </div>
+
+                {attempts >= 3 && (
+                  <div className="text-[11px] text-[#6e6e73] pt-1">
+                    Tip: 대소문자·띄어쓰기는 무시해요. 정답의 핵심 단어만 맞히면 OK.
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </Modal>
+      );
+    }
+
+    // ========================================
+    // 🧩 Profile Panel
+    // ========================================
+    function ProfilePanel({ open, onClose, persona, setPersona }) {
+      const [local, setLocal] = useState(persona);
+      useEffect(() => { if (open) setLocal(persona); }, [open, persona]);
+      if (!open) return null;
+
+      const save = () => { setPersona(local); onClose(); };
+
+      return (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose}></div>
+          <aside className="relative ml-auto w-full sm:max-w-md bg-[#0b0b0d] border-l border-white/10 h-full shadow-2xl
+                            overflow-y-auto scroll-clean animate-[bubbleIn_0.3s_ease]">
+            <div className="px-6 py-5 border-b border-white/10 sticky top-0 bg-[#0b0b0d]/90 backdrop-blur z-10 flex items-center justify-between">
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-[#A78BFA] font-semibold">Persona</div>
+                <h2 className="text-xl font-semibold text-[#f5f5f7]">AI 프로필 편집</h2>
+              </div>
+              <button onClick={onClose}
+                className="p-2 rounded-full hover:bg-white/10 text-[#a1a1a6] hover:text-white transition-colors">✕</button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {local.id && PRESET_BY_ID[local.id] && (
+                <div className="bg-[rgba(139,92,246,0.08)] border border-[rgba(139,92,246,0.25)] rounded-2xl p-3 flex items-center gap-3">
+                  <span className="text-2xl">{PRESET_BY_ID[local.id].emoji}</span>
+                  <div className="text-[12px] text-[#a1a1a6]">
+                    프리셋: <span className="text-[#C4B5FD] font-medium">{PRESET_BY_ID[local.id].title}</span>
+                  </div>
+                </div>
+              )}
+
+              <Input label="AI 이름" value={local.name}
+                onChange={(e) => setLocal({ ...local, name: e.target.value })}
+                placeholder="예) 보라돌이" />
+
+              <div>
+                <div className="text-[13px] font-medium text-[#a1a1a6] mb-2">성격</div>
+                <div className="flex flex-wrap gap-2">
+                  {PERSONALITY_OPTIONS.map(p => (
+                    <Chip key={p.id} active={local.personality === p.id}
+                      onClick={() => setLocal({ ...local, personality: p.id })}>
+                      <span className="mr-1">{p.emoji}</span>{p.label}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[13px] font-medium text-[#a1a1a6] mb-2">말투</div>
+                <div className="flex flex-wrap gap-2">
+                  {TONE_OPTIONS.map(t => (
+                    <Chip key={t.id} active={local.tone === t.id}
+                      onClick={() => setLocal({ ...local, tone: t.id })}>
+                      {t.label}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[13px] font-medium text-[#a1a1a6] mb-2">전문 분야</div>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {EXPERTISE_PRESETS.map(e => (
+                    <Chip key={e} active={local.expertise === e}
+                      onClick={() => setLocal({ ...local, expertise: e })}>
+                      {e}
+                    </Chip>
+                  ))}
+                </div>
+                <Input value={local.expertise}
+                  onChange={(e) => setLocal({ ...local, expertise: e.target.value })}
+                  placeholder="직접 입력 (예: 와인 페어링)" />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[13px] font-medium text-[#a1a1a6]">창의성</span>
+                  <span className="text-[13px] text-[#A78BFA] font-medium">
+                    {Math.round(local.creativity * 100)}%
+                  </span>
+                </div>
+                <input type="range" min="0" max="1" step="0.05"
+                  value={local.creativity}
+                  onChange={(e) => setLocal({ ...local, creativity: parseFloat(e.target.value) })}
+                  className="purple-slider w-full"
+                  style={{ '--val': `${local.creativity * 100}%` }} />
+                <div className="flex justify-between text-[11px] text-[#6e6e73] mt-1">
+                  <span>정확하게</span><span>균형있게</span><span>창의적으로</span>
+                </div>
+              </div>
+
+              <Textarea label="한 줄 소개 (선택)" value={local.bio}
+                onChange={(e) => setLocal({ ...local, bio: e.target.value })}
+                placeholder="예) 20년차 프론트엔드 개발자." rows={2} />
+
+              {local.systemExtra && (
+                <div className="text-[11px] text-[#6e6e73] italic border-l-2 border-white/10 pl-3">
+                  이 페르소나는 시스템 프롬프트에 세부 설정이 내장되어 있어요. 성격/말투를 바꾸면 프리셋 효과가 약해질 수 있습니다.
+                </div>
+              )}
+
+              <div className="bg-[rgba(139,92,246,0.1)] border border-[rgba(139,92,246,0.25)] rounded-2xl p-4 text-[13px] text-[#E9D5FF] leading-relaxed">
+                <strong className="block mb-1 text-[#C4B5FD]">📌 프리뷰</strong>
+                {local.name || 'AI'} · {PERSONALITY_OPTIONS.find(p => p.id === local.personality)?.label} ·{' '}
+                {TONE_OPTIONS.find(t => t.id === local.tone)?.label}
+                {local.expertise && <> · {local.expertise}</>}
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-[#0b0b0d] border-t border-white/10 px-6 py-4 flex gap-3">
+              <Button variant="secondary" className="flex-1" onClick={onClose}>취소</Button>
+              <Button className="flex-1" onClick={save}>저장</Button>
+            </div>
+          </aside>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🧩 Message Bubble
+    // ========================================
+    function MessageBubble({ msg, persona }) {
+      // 시스템 메시지 (페르소나 전환 구분선 등)
+      if (msg.role === 'system') {
+        return (
+          <div className="flex justify-center bubble-in py-1">
+            <div className="text-[11px] text-[#a1a1a6] bg-white/[0.04] border border-white/10
+                            px-3 py-1.5 rounded-full">
+              {msg.content}
+            </div>
+          </div>
+        );
+      }
+
+      const isUser = msg.role === 'user';
+      const isError = msg.error === true;
+      const time = new Date(msg.ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+      // 메시지가 자체 페르소나 스냅샷을 가지면 우선 사용 (과거 대화 상대 유지)
+      const msgPersona = msg.persona || persona;
+      const avatarChar = msgPersona.emoji || (msgPersona.name || 'AI').slice(0, 1);
+
+      return (
+        <div className={`flex bubble-in gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
+          {!isUser && (
+            <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#C4B5FD]
+                            flex items-center justify-center text-black text-sm font-semibold shadow-md">
+              {avatarChar}
+            </div>
+          )}
+          <div className={`max-w-[78%] flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+            {!isUser && (
+              <div className="text-[11px] text-[#6e6e73] mb-1 px-1">
+                {msgPersona.name || 'AI'}{msgPersona.title ? ` · ${msgPersona.title}` : ''}
+              </div>
+            )}
+            <div className={`px-4 py-3 rounded-2xl text-[15px] leading-relaxed whitespace-pre-wrap break-words
+              ${isUser ? 'bg-[#8B5CF6] text-white rounded-br-md'
+                : isError ? 'bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] text-[#FCA5A5] rounded-bl-md'
+                          : 'bg-[#1c1c1f] text-[#f5f5f7] border border-white/10 rounded-bl-md shadow-lg'}`}>
+              {msg.content}
+            </div>
+            <div className="text-[10px] text-[#6e6e73] mt-1 px-1">{time}</div>
+          </div>
+          {isUser && (
+            <div className="flex-shrink-0 w-9 h-9 rounded-full bg-[#1c1c1f] border border-white/10
+                            flex items-center justify-center text-[#d1d1d6] text-sm font-medium">나</div>
+          )}
+        </div>
+      );
+    }
+
+    function TypingBubble({ persona }) {
+      const avatarChar = persona.emoji || (persona.name || 'AI').slice(0, 1);
+      return (
+        <div className="flex gap-3 bubble-in">
+          <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#C4B5FD]
+                          flex items-center justify-center text-black text-sm font-semibold shadow-md">
+            {avatarChar}
+          </div>
+          <div className="bg-[#1c1c1f] border border-white/10 rounded-2xl rounded-bl-md px-5 py-4 shadow-lg flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#A78BFA] dot"></span>
+            <span className="w-2 h-2 rounded-full bg-[#A78BFA] dot"></span>
+            <span className="w-2 h-2 rounded-full bg-[#A78BFA] dot"></span>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🧩 Chat Input
+    // ========================================
+    function ChatInput({ onSend, disabled }) {
+      const [text, setText] = useState('');
+      const taRef = useRef(null);
+
+      const submit = () => {
+        const t = text.trim();
+        if (!t || disabled) return;
+        onSend(t);
+        setText('');
+        if (taRef.current) taRef.current.style.height = 'auto';
+      };
+
+      const onKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+      };
+
+      const onChange = (e) => {
+        setText(e.target.value);
+        if (taRef.current) {
+          taRef.current.style.height = 'auto';
+          taRef.current.style.height = Math.min(taRef.current.scrollHeight, 160) + 'px';
+        }
+      };
+
+      return (
+        <div className="border-t border-white/5 bg-black/80 backdrop-blur-xl">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
+            <div className="flex items-end gap-2 bg-[#141418] border border-white/10 rounded-3xl px-4 py-2.5
+                            shadow-[0_10px_40px_-15px_rgba(139,92,246,0.4)]
+                            focus-within:border-[#A78BFA] focus-within:ring-4 focus-within:ring-[rgba(139,92,246,0.2)] transition-all">
+              <textarea ref={taRef} rows={1} value={text} onChange={onChange} onKeyDown={onKeyDown}
+                placeholder="메시지를 입력하세요.  (Enter: 전송 · Shift+Enter: 줄바꿈)"
+                className="flex-1 bg-transparent resize-none outline-none text-[15px] py-1.5 max-h-40
+                           text-[#f5f5f7] placeholder:text-[#6e6e73]"
+                disabled={disabled} />
+              <Button onClick={submit} disabled={!text.trim() || disabled} size="md" className="!px-4 !py-2">
+                전송 →
+              </Button>
+            </div>
+            <div className="text-center text-[11px] text-[#6e6e73] mt-2">
+              답변은 OpenAI API + 설정된 프로필을 기반으로 생성돼요.
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function SuggestionChips({ onPick, persona }) {
+      const suggestions = useMemo(() => {
+        const base = [
+          '안녕! 너 자신을 소개해줘',
+          '오늘 나에게 조언 하나 해줘',
+          '너의 세계관에 대해 짧게 얘기해줘',
+        ];
+        if (persona.expertise) base.unshift(`${persona.expertise}에 대해 입문자에게 설명해줘`);
+        return base;
+      }, [persona.expertise]);
+
+      return (
+        <div className="flex flex-wrap justify-center gap-2 mt-6">
+          {suggestions.map((s, i) => (
+            <button key={i} onClick={() => onPick(s)}
+              className="chip px-4 py-2 rounded-full text-[13px] text-[#d1d1d6]
+                         bg-[#1c1c1f] border border-white/10 hover:border-[#A78BFA] hover:text-white">
+              {s}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    // ========================================
+    // 📄 Chat Area
+    // ========================================
+    function ChatArea({ persona, messages, setMessages, isTyping, setIsTyping }) {
+      const endRef = useRef(null);
+
+      useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isTyping]);
+
+      const send = useCallback(async (text) => {
+        const userMsg = { id: Date.now(), role: 'user', content: text, ts: Date.now() };
+        setMessages(prev => [...prev, userMsg]);
+        setIsTyping(true);
+        try {
+          const history = [...messages, userMsg].slice(-12)
+            .map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }))
+            .slice(0, -1);
+          const data = await callChatAPI({ persona, message: text, history });
+          const personaSnapshot = {
+            id: persona.id, name: persona.name, emoji: persona.emoji,
+            title: persona.title, personality: persona.personality,
+          };
+          setMessages(prev => [...prev, {
+            id: Date.now() + 1, role: 'ai',
+            content: data.content || '(빈 응답)', ts: Date.now(),
+            persona: personaSnapshot,
+          }]);
+        } catch (err) {
+          const personaSnapshot = {
+            id: persona.id, name: persona.name, emoji: persona.emoji,
+            title: persona.title, personality: persona.personality,
+          };
+          setMessages(prev => [...prev, {
+            id: Date.now() + 1, role: 'ai', error: true,
+            content: `⚠️ 응답을 가져오지 못했어요.\n${err.message}`,
+            ts: Date.now(), persona: personaSnapshot,
+          }]);
+        } finally {
+          setIsTyping(false);
+        }
+      }, [persona, messages, setMessages, setIsTyping]);
+
+      const isEmpty = messages.length === 0;
+      const avatarChar = persona.emoji || (persona.name || 'AI').slice(0, 1);
+
+      return (
+        <div className="flex-1 flex flex-col min-h-0">
+          <div id="chat" className="flex-1 overflow-y-auto scroll-clean">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-5">
+              {isEmpty ? (
+                <div className="text-center py-16">
+                  <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#C4B5FD]
+                                  flex items-center justify-center text-black text-2xl font-semibold
+                                  shadow-[0_10px_40px_-10px_rgba(139,92,246,0.6)]">
+                    {avatarChar}
+                  </div>
+                  <h3 className="mt-5 text-2xl font-semibold tracking-tight text-[#f5f5f7]">
+                    {persona.name || 'AI'}와의 대화를 시작해보세요
+                  </h3>
+                  <p className="mt-2 text-[15px] text-[#a1a1a6]">
+                    {persona.title || PERSONALITY_OPTIONS.find(p => p.id === persona.personality)?.label}
+                    {persona.expertise && <> · {persona.expertise}</>}
+                  </p>
+                  <SuggestionChips onPick={send} persona={persona} />
+                </div>
+              ) : (
+                messages.map(msg => <MessageBubble key={msg.id} msg={msg} persona={persona} />)
+              )}
+              {isTyping && <TypingBubble persona={persona} />}
+              <div ref={endRef}></div>
+            </div>
+          </div>
+          <ChatInput onSend={send} disabled={isTyping} />
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🚀 App Root
+    // ========================================
+    const DEFAULT_PERSONA = {
+      id: null,
+      name: '보라',
+      emoji: '💜',
+      title: '',
+      personality: 'friendly',
+      tone: 'polite',
+      expertise: '프론트엔드 개발',
+      creativity: 0.65,
+      bio: '',
+      systemExtra: '',
+    };
+
+    function App() {
+      const saved = loadState();
+      const [persona, setPersona] = useState(saved?.persona || DEFAULT_PERSONA);
+      const [messages, setMessages] = useState(saved?.messages || []);
+      const [isTyping, setIsTyping] = useState(false);
+      const [profileOpen, setProfileOpen] = useState(false);
+      const [rouletteOpen, setRouletteOpen] = useState(false);
+      const [quizOpen, setQuizOpen] = useState(false);
+      const [quizIntent, setQuizIntent] = useState(null);
+      const [showHero, setShowHero] = useState((saved?.messages?.length ?? 0) === 0);
+
+      useEffect(() => { saveState({ persona, messages }); }, [persona, messages]);
+
+      const isLocked = messages.length > 0;
+
+      const requestRoulette = () => {
+        if (isLocked) { setQuizIntent('roulette'); setQuizOpen(true); }
+        else setRouletteOpen(true);
+      };
+      const requestProfile = () => {
+        if (isLocked) { setQuizIntent('profile'); setQuizOpen(true); }
+        else setProfileOpen(true);
+      };
+      const onQuizSuccess = () => {
+        setQuizOpen(false);
+        if (quizIntent === 'roulette') setRouletteOpen(true);
+        else if (quizIntent === 'profile') setProfileOpen(true);
+        setQuizIntent(null);
+      };
+      const onRoulettePick = (preset) => {
+        const newPersona = { ...preset };
+        // 이미 대화가 있다면 전환 시점을 시스템 메시지로 남긴다 (대화 상대 히스토리 보존)
+        if (messages.length > 0) {
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            role: 'system',
+            content: `${newPersona.emoji} ${newPersona.name} · ${newPersona.title}(으)로 전환됨`,
+            ts: Date.now(),
+          }]);
+        }
+        setPersona(newPersona);
+        setRouletteOpen(false);
+        setShowHero(false);
+        setTimeout(() => document.getElementById('chat')?.scrollIntoView({ behavior: 'smooth' }), 50);
+      };
+      const startWithCurrent = () => {
+        setShowHero(false);
+        setTimeout(() => document.getElementById('chat')?.scrollIntoView({ behavior: 'smooth' }), 50);
+      };
+      const resetConversation = () => {
+        if (confirm('대화 기록을 모두 지울까요?')) {
+          setMessages([]); setShowHero(true);
+        }
+      };
+
+      const personalityLabel = PERSONALITY_OPTIONS.find(p => p.id === persona.personality);
+      const toneLabel = TONE_OPTIONS.find(t => t.id === persona.tone);
+
+      return (
+        <div className="min-h-screen flex flex-col bg-black">
+          <TopNav onOpenProfile={requestProfile} persona={persona} />
+
+          {showHero && (
+            <Hero persona={persona}
+              onSpinRoulette={() => setRouletteOpen(true)}
+              onStartChat={startWithCurrent} />
+          )}
+
+          {/* Persona summary strip — Hero가 없으면 상단 sticky로 고정 (룰렛/편집 상시 노출) */}
+          <div className={!showHero ? 'sticky top-12 z-20 bg-black/85 backdrop-blur-xl border-b border-white/5' : ''}>
+            <div className="max-w-4xl w-full mx-auto px-4 sm:px-6 py-2">
+              <Card className="flex items-center gap-4 p-4">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#C4B5FD]
+                              flex items-center justify-center text-black text-xl font-semibold flex-shrink-0">
+                {persona.emoji || (persona.name || 'AI').slice(0, 1)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-[15px] text-[#f5f5f7]">{persona.name || 'AI'}</span>
+                  {persona.title && <Badge>{persona.title}</Badge>}
+                  {!persona.title && personalityLabel && (
+                    <Badge>{personalityLabel.emoji} {personalityLabel.label}</Badge>
+                  )}
+                  {toneLabel && <Badge>{toneLabel.label}</Badge>}
+                </div>
+                <p className="text-[13px] text-[#a1a1a6] mt-1 truncate">
+                  {persona.bio || persona.subtitle || '프로필을 편집해 나만의 AI를 완성하세요.'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                <Button size="sm" onClick={requestRoulette}>
+                  {isLocked && '🔒 '}🎲 룰렛
+                </Button>
+                <Button size="sm" variant="secondary" onClick={requestProfile}>
+                  {isLocked && '🔒 '}편집
+                </Button>
+                <Button size="sm" variant="ghost" onClick={resetConversation}>기록 지우기</Button>
+              </div>
+              </Card>
+            </div>
+          </div>
+
+          <main className="flex-1 flex flex-col min-h-[60vh] mt-4">
+            <ChatArea
+              persona={persona}
+              messages={messages}
+              setMessages={setMessages}
+              isTyping={isTyping}
+              setIsTyping={setIsTyping} />
+          </main>
+
+          <footer className="text-center text-[11px] text-[#6e6e73] py-6">
+            Persona Chat — Designed with an Apple-inspired aesthetic. Powered by OpenAI.
+          </footer>
+
+          <RouletteModal open={rouletteOpen}
+            onClose={() => setRouletteOpen(false)}
+            onPick={onRoulettePick} />
+
+          <QuizModal open={quizOpen}
+            onClose={() => { setQuizOpen(false); setQuizIntent(null); }}
+            persona={persona}
+            intent={quizIntent}
+            onSuccess={onQuizSuccess} />
+
+          <ProfilePanel open={profileOpen}
+            onClose={() => setProfileOpen(false)}
+            persona={persona} setPersona={setPersona} />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
