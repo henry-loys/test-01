@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Class Agent — 수업 내용 질문 에이전트</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    html, body, #root { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Pretendard", system-ui,
+        "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #0B0B0F;
+      color: #E6E6EA;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #26262E; border-radius: 8px; }
+    ::-webkit-scrollbar-thumb:hover { background: #36363E; }
+
+    /* Markdown content */
+    .md-body { line-height: 1.65; font-size: 14.5px; color: #E6E6EA; }
+    .md-body p { margin: 0.5em 0; }
+    .md-body h1, .md-body h2, .md-body h3, .md-body h4 {
+      font-weight: 600; margin: 0.9em 0 0.4em; letter-spacing: -0.01em; color: #F2F2F5;
+    }
+    .md-body h1 { font-size: 1.3em; }
+    .md-body h2 { font-size: 1.15em; }
+    .md-body h3 { font-size: 1.05em; }
+    .md-body ul, .md-body ol { padding-left: 1.3em; margin: 0.4em 0; }
+    .md-body li { margin: 0.2em 0; }
+    .md-body a { color: #A78BFA; text-decoration: underline; text-underline-offset: 2px; }
+    .md-body strong { color: #F5F5F8; }
+    .md-body blockquote {
+      border-left: 3px solid #8B5CF6;
+      padding: 0.2em 0.8em; margin: 0.5em 0;
+      color: #BDBDC7; background: #14141A; border-radius: 4px;
+    }
+    .md-body code {
+      font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+      background: #0A0A0F;
+      border: 1px solid #26262E;
+      padding: 1px 6px; border-radius: 5px;
+      font-size: 0.88em; color: #E4D8FF;
+    }
+    .md-body pre {
+      background: #0A0A0F;
+      border: 1px solid #26262E;
+      border-radius: 10px;
+      padding: 12px 14px;
+      overflow-x: auto;
+      margin: 0.6em 0;
+    }
+    .md-body pre code {
+      background: transparent;
+      border: none;
+      padding: 0; color: #E6E6EA;
+      font-size: 13px; line-height: 1.55;
+    }
+    .md-body table {
+      border-collapse: collapse; margin: 0.5em 0; font-size: 0.92em;
+    }
+    .md-body th, .md-body td {
+      border: 1px solid #26262E; padding: 6px 10px;
+    }
+    .md-body th { background: #14141A; }
+
+    /* Fade-in toast */
+    @keyframes toastIn {
+      from { opacity: 0; transform: translate(-50%, 10px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
+    .toast-anim { animation: toastIn 0.18s ease-out; }
+
+    /* Typing dots */
+    @keyframes dotPulse {
+      0%, 80%, 100% { opacity: 0.25; }
+      40% { opacity: 1; }
+    }
+    .dot { display:inline-block; width:6px; height:6px; border-radius:50%;
+      background:#A78BFA; margin:0 2px; animation: dotPulse 1.2s infinite ease-in-out; }
+    .dot:nth-child(2) { animation-delay: 0.15s; }
+    .dot:nth-child(3) { animation-delay: 0.3s; }
+
+    textarea { font-family: inherit; }
+    .mono { font-family: "SF Mono", Menlo, Monaco, Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="env,react">
+    const { useState, useEffect, useRef, useMemo, useCallback, useContext, createContext } = React;
+
+    // ========================================
+    // Config / API helpers
+    // ========================================
+    const API_BASE_URL = '/api';
+
+    async function api(path, opts = {}) {
+      const res = await fetch(`${API_BASE_URL}${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts,
+      });
+      let json;
+      try { json = await res.json(); } catch { json = {}; }
+      if (!res.ok || json.success === false) {
+        const msg = json && json.message ? json.message : `요청 실패 (${res.status})`;
+        throw new Error(msg);
+      }
+      return json.data != null ? json.data : json;
+    }
+
+    function formatRelative(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      const diff = (Date.now() - d.getTime()) / 1000;
+      if (diff < 60) return '방금 전';
+      if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+      if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}일 전`;
+      return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    // ========================================
+    // Toast Context
+    // ========================================
+    const ToastCtx = createContext(null);
+    const useToast = () => useContext(ToastCtx);
+
+    function ToastProvider({ children }) {
+      const [toast, setToast] = useState(null);
+      const show = useCallback((message, variant = 'default') => {
+        setToast({ message, variant, id: Date.now() });
+      }, []);
+      useEffect(() => {
+        if (!toast) return;
+        const t = setTimeout(() => setToast(null), 2000);
+        return () => clearTimeout(t);
+      }, [toast]);
+      return (
+        <ToastCtx.Provider value={show}>
+          {children}
+          {toast && (
+            <div
+              key={toast.id}
+              className={`toast-anim fixed left-1/2 bottom-8 z-50 -translate-x-1/2 px-4 py-2.5 rounded-full text-sm shadow-xl border
+                ${toast.variant === 'error'
+                  ? 'bg-red-500/15 border-red-400/40 text-red-200'
+                  : toast.variant === 'success'
+                    ? 'bg-violet-500/15 border-violet-400/40 text-violet-100'
+                    : 'bg-[#1A1A22] border-[#2E2E38] text-[#E6E6EA]'}`}
+            >
+              {toast.message}
+            </div>
+          )}
+        </ToastCtx.Provider>
+      );
+    }
+
+    // ========================================
+    // Design System
+    // ========================================
+    function Button({ variant = 'primary', size = 'md', disabled, onClick, className = '', children, type = 'button', title }) {
+      const base = 'inline-flex items-center justify-center gap-2 font-medium rounded-[10px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60 disabled:opacity-50 disabled:cursor-not-allowed';
+      const sizes = {
+        sm: 'h-8 px-3 text-xs',
+        md: 'h-10 px-4 text-sm',
+        lg: 'h-11 px-5 text-[15px]',
+      };
+      const variants = {
+        primary: 'bg-violet-500 hover:bg-violet-400 text-white',
+        secondary: 'bg-[#1A1A22] hover:bg-[#22222C] border border-[#2A2A34] text-[#E6E6EA]',
+        ghost: 'hover:bg-[#1A1A22] text-[#C8C8D0]',
+        danger: 'bg-red-500/90 hover:bg-red-500 text-white',
+        outline: 'border border-[#2A2A34] hover:border-violet-400 hover:text-violet-300 text-[#E6E6EA]',
+      };
+      return (
+        <button
+          type={type}
+          title={title}
+          onClick={onClick}
+          disabled={disabled}
+          className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function IconButton({ onClick, title, children, className = '', variant = 'ghost' }) {
+      const variants = {
+        ghost: 'hover:bg-[#26262E] text-[#8A8A94] hover:text-[#E6E6EA]',
+        danger: 'hover:bg-red-500/15 text-[#8A8A94] hover:text-red-300',
+      };
+      return (
+        <button
+          type="button"
+          title={title}
+          onClick={onClick}
+          className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${variants[variant]} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Badge({ children, variant = 'default', className = '' }) {
+      const variants = {
+        default: 'bg-[#1A1A22] border-[#2A2A34] text-[#C8C8D0]',
+        violet: 'bg-violet-500/15 border-violet-400/30 text-violet-200',
+        code: 'bg-emerald-500/12 border-emerald-400/25 text-emerald-200',
+        text: 'bg-sky-500/12 border-sky-400/25 text-sky-200',
+      };
+      return (
+        <span className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded border ${variants[variant]} ${className}`}>
+          {children}
+        </span>
+      );
+    }
+
+    function Input({ value, onChange, placeholder, label, type = 'text', className = '', disabled }) {
+      return (
+        <label className={`block ${className}`}>
+          {label && <span className="block text-xs font-medium text-[#8A8A94] mb-1.5">{label}</span>}
+          <input
+            type={type}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            disabled={disabled}
+            className="w-full h-10 px-3 rounded-[10px] bg-[#14141A] border border-[#26262E] text-[#E6E6EA] placeholder:text-[#5A5A64]
+              focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/20 transition-colors"
+          />
+        </label>
+      );
+    }
+
+    function Textarea({ value, onChange, placeholder, label, rows = 6, className = '', mono = false, onKeyDown, disabled }) {
+      return (
+        <label className={`block ${className}`}>
+          {label && <span className="block text-xs font-medium text-[#8A8A94] mb-1.5">{label}</span>}
+          <textarea
+            value={value}
+            onChange={onChange}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            rows={rows}
+            disabled={disabled}
+            className={`w-full px-3 py-2.5 rounded-[10px] bg-[#14141A] border border-[#26262E] text-[#E6E6EA] placeholder:text-[#5A5A64]
+              focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/20 transition-colors resize-y
+              ${mono ? 'mono text-[13px]' : 'text-sm'}`}
+          />
+        </label>
+      );
+    }
+
+    function TabBar({ tabs, value, onChange }) {
+      return (
+        <div className="grid grid-cols-2 p-1 bg-[#14141A] border border-[#26262E] rounded-[10px] gap-1">
+          {tabs.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => onChange(t.value)}
+              className={`h-8 rounded-[7px] text-xs font-medium transition-colors
+                ${value === t.value
+                  ? 'bg-violet-500 text-white shadow-sm'
+                  : 'text-[#8A8A94] hover:text-[#E6E6EA] hover:bg-[#1A1A22]'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    // ========================================
+    // Icons (inline SVG)
+    // ========================================
+    const Icon = {
+      Plus: (p) => <svg viewBox="0 0 20 20" fill="none" width="14" height="14" {...p}><path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
+      Trash: (p) => <svg viewBox="0 0 20 20" fill="none" width="14" height="14" {...p}><path d="M4 6h12M8 6V4h4v2M6 6l1 10h6l1-10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+      Edit: (p) => <svg viewBox="0 0 20 20" fill="none" width="14" height="14" {...p}><path d="M13 4l3 3-9 9H4v-3l9-9z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+      Send: (p) => <svg viewBox="0 0 20 20" fill="none" width="16" height="16" {...p}><path d="M3 10l14-6-6 14-2-6-6-2z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+      Menu: (p) => <svg viewBox="0 0 20 20" fill="none" width="18" height="18" {...p}><path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>,
+      Close: (p) => <svg viewBox="0 0 20 20" fill="none" width="16" height="16" {...p}><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>,
+      Chat: (p) => <svg viewBox="0 0 20 20" fill="none" width="14" height="14" {...p}><path d="M4 5h12v8H8l-4 3V5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>,
+    };
+
+    // ========================================
+    // Markdown rendering
+    // ========================================
+    // Configure marked once (breaks on single line breaks like ChatGPT)
+    if (window.marked && window.marked.setOptions) {
+      window.marked.setOptions({ breaks: true, gfm: true });
+    }
+
+    function Markdown({ source }) {
+      const html = useMemo(() => {
+        try {
+          return window.marked ? window.marked.parse(source || '') : (source || '');
+        } catch {
+          return source || '';
+        }
+      }, [source]);
+      return <div className="md-body" dangerouslySetInnerHTML={{ __html: html }} />;
+    }
+
+    // ========================================
+    // Sidebar — Conversations list
+    // ========================================
+    function ConversationsList({ conversations, activeId, onSelect, onCreate, onDelete, loading }) {
+      return (
+        <div className="flex flex-col h-full">
+          <div className="px-3 pb-3">
+            <Button variant="primary" className="w-full" size="md" onClick={onCreate}>
+              <Icon.Plus /> 새 대화
+            </Button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-1">
+            {loading && conversations.length === 0 && (
+              <div className="px-3 py-8 text-xs text-[#6A6A74] text-center">불러오는 중…</div>
+            )}
+            {!loading && conversations.length === 0 && (
+              <div className="px-3 py-8 text-xs text-[#6A6A74] text-center">
+                아직 대화가 없습니다.<br/>"새 대화"로 시작하세요.
+              </div>
+            )}
+            {conversations.map((c) => {
+              const active = c.id === activeId;
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => onSelect(c.id)}
+                  className={`group relative cursor-pointer rounded-[10px] px-3 py-2.5 border transition-colors
+                    ${active
+                      ? 'bg-violet-500/15 border-violet-400/40'
+                      : 'bg-transparent border-transparent hover:bg-[#14141A] hover:border-[#22222C]'}`}
+                >
+                  <div className={`text-[13px] font-medium truncate pr-7 ${active ? 'text-violet-100' : 'text-[#E6E6EA]'}`}>
+                    {c.title || '새 대화'}
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-2 text-[11px] text-[#6A6A74]">
+                    <span>{formatRelative(c.updatedAt || c.createdAt)}</span>
+                    <span>·</span>
+                    <span>{c.messageCount ?? 0}개 메시지</span>
+                  </div>
+                  <IconButton
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100"
+                    variant="danger"
+                    title="삭제"
+                    onClick={(e) => { e.stopPropagation(); onDelete(c); }}
+                  >
+                    <Icon.Trash />
+                  </IconButton>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Sidebar — Knowledge list
+    // ========================================
+    function KnowledgeList({ items, activeId, onSelect, onCreate, onEdit, onDelete, loading }) {
+      return (
+        <div className="flex flex-col h-full">
+          <div className="px-3 pb-3">
+            <Button variant="primary" className="w-full" size="md" onClick={onCreate}>
+              <Icon.Plus /> 자료 추가
+            </Button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-1">
+            {loading && items.length === 0 && (
+              <div className="px-3 py-8 text-xs text-[#6A6A74] text-center">불러오는 중…</div>
+            )}
+            {!loading && items.length === 0 && (
+              <div className="px-3 py-8 text-xs text-[#6A6A74] text-center">
+                등록된 자료가 없습니다.<br/>강의자료를 추가해 두면<br/>에이전트가 참고합니다.
+              </div>
+            )}
+            {items.map((it) => {
+              const active = it.id === activeId;
+              return (
+                <div
+                  key={it.id}
+                  onClick={() => onSelect(it.id)}
+                  className={`group relative cursor-pointer rounded-[10px] px-3 py-2.5 border transition-colors
+                    ${active
+                      ? 'bg-violet-500/15 border-violet-400/40'
+                      : 'bg-transparent border-transparent hover:bg-[#14141A] hover:border-[#22222C]'}`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Badge variant={it.kind === 'code' ? 'code' : 'text'}>{it.kind === 'code' ? 'CODE' : 'TEXT'}</Badge>
+                    {it.language && it.kind === 'code' && (
+                      <span className="text-[10px] text-[#8A8A94] uppercase tracking-wider">{it.language}</span>
+                    )}
+                  </div>
+                  <div className={`text-[13px] font-medium truncate pr-14 ${active ? 'text-violet-100' : 'text-[#E6E6EA]'}`}>
+                    {it.title || '(제목 없음)'}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-[#6A6A74]">
+                    {formatDate(it.updatedAt || it.createdAt)}
+                  </div>
+                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100">
+                    <IconButton title="수정" onClick={(e) => { e.stopPropagation(); onEdit(it); }}>
+                      <Icon.Edit />
+                    </IconButton>
+                    <IconButton title="삭제" variant="danger" onClick={(e) => { e.stopPropagation(); onDelete(it); }}>
+                      <Icon.Trash />
+                    </IconButton>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Sidebar Container
+    // ========================================
+    function Sidebar({
+      tab, setTab,
+      conversations, activeConversationId, onSelectConversation, onCreateConversation, onDeleteConversation, loadingConvos,
+      kbItems, activeKbId, onSelectKb, onCreateKb, onEditKb, onDeleteKb, loadingKb,
+      health,
+      onClose,
+    }) {
+      return (
+        <aside className="w-[280px] shrink-0 h-full flex flex-col bg-[#08080C] border-r border-[#1A1A22]">
+          <div className="flex items-center justify-between px-4 py-4">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-violet-500 shadow-[0_0_12px_rgba(139,92,246,0.6)]" />
+              <div>
+                <div className="text-[15px] font-semibold tracking-tight text-[#F2F2F5]">Class Agent</div>
+                <div className="text-[10px] text-[#6A6A74] mt-0.5">수업 내용 질문 에이전트</div>
+              </div>
+            </div>
+            {onClose && (
+              <IconButton className="md:hidden" onClick={onClose} title="닫기">
+                <Icon.Close />
+              </IconButton>
+            )}
+          </div>
+
+          <div className="px-3 pb-3">
+            <TabBar
+              tabs={[{ value: 'chat', label: '대화' }, { value: 'kb', label: '지식 베이스' }]}
+              value={tab}
+              onChange={setTab}
+            />
+          </div>
+
+          <div className="flex-1 min-h-0">
+            {tab === 'chat' ? (
+              <ConversationsList
+                conversations={conversations}
+                activeId={activeConversationId}
+                onSelect={onSelectConversation}
+                onCreate={onCreateConversation}
+                onDelete={onDeleteConversation}
+                loading={loadingConvos}
+              />
+            ) : (
+              <KnowledgeList
+                items={kbItems}
+                activeId={activeKbId}
+                onSelect={onSelectKb}
+                onCreate={onCreateKb}
+                onEdit={onEditKb}
+                onDelete={onDeleteKb}
+                loading={loadingKb}
+              />
+            )}
+          </div>
+
+          {health && (
+            <div className="px-4 py-3 border-t border-[#1A1A22] text-[10.5px] text-[#6A6A74] flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${health.hasApiKey ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                {health.model || 'LLM'}
+              </span>
+              <span>자료 {health.knowledgeCount ?? 0} · 대화 {health.conversationCount ?? 0}</span>
+            </div>
+          )}
+        </aside>
+      );
+    }
+
+    // ========================================
+    // Chat view
+    // ========================================
+    function ChatEmpty({ onCreate }) {
+      return (
+        <div className="flex-1 flex items-center justify-center px-6">
+          <div className="max-w-md text-center">
+            <div className="w-12 h-12 mx-auto mb-5 rounded-2xl bg-violet-500/15 border border-violet-400/30 flex items-center justify-center">
+              <span className="text-violet-300"><Icon.Chat /></span>
+            </div>
+            <h2 className="text-xl font-semibold tracking-tight text-[#F2F2F5]">무엇을 도와드릴까요?</h2>
+            <p className="mt-2 text-sm text-[#8A8A94] leading-relaxed">
+              강의 자료에 대해 궁금한 것을 물어보세요. 에이전트가 등록된 지식 베이스를 참고해 답변합니다.
+            </p>
+            <div className="mt-6">
+              <Button variant="primary" onClick={onCreate}>
+                <Icon.Plus /> 새 대화 시작
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function CitationChip({ citation, onClick }) {
+      return (
+        <button
+          type="button"
+          onClick={onClick}
+          className="inline-flex items-center gap-1 max-w-[240px] h-6 px-2 rounded-full text-[11px]
+            bg-[#14141A] border border-[#2A2A34] text-[#C8C8D0] hover:border-violet-400/60 hover:text-violet-200 transition-colors"
+          title={citation.title}
+        >
+          <span className="truncate">{citation.title}</span>
+        </button>
+      );
+    }
+
+    function MessageBubble({ message, kbMap, onCitationClick }) {
+      const isUser = message.role === 'user';
+      return (
+        <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+          <div className={`max-w-[780px] w-full ${isUser ? 'flex justify-end' : ''}`}>
+            {isUser ? (
+              <div className="inline-block max-w-full px-4 py-2.5 rounded-2xl rounded-br-md bg-violet-500 text-white text-[14.5px] leading-relaxed whitespace-pre-wrap break-words">
+                {message.content}
+              </div>
+            ) : (
+              <div className="w-full">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-5 h-5 rounded-full bg-violet-500/20 border border-violet-400/40 flex items-center justify-center">
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                  </span>
+                  <span className="text-[11px] text-[#8A8A94] font-medium">Class Agent</span>
+                </div>
+                <div className="pl-7">
+                  <Markdown source={message.content} />
+                  {message.citations && message.citations.length > 0 && (
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] text-[#6A6A74] mr-1">참고</span>
+                      {message.citations.map((cid, idx) => {
+                        const kb = kbMap[cid];
+                        const title = kb ? kb.title : '알 수 없는 자료';
+                        return (
+                          <CitationChip
+                            key={cid + '_' + idx}
+                            citation={{ id: cid, title }}
+                            onClick={() => onCitationClick(cid)}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function ChatHeader({ conversation, kbCount, onOpenSidebar }) {
+      return (
+        <div className="shrink-0 px-4 md:px-8 py-3.5 border-b border-[#1A1A22] flex items-center gap-3">
+          <IconButton className="md:hidden" title="메뉴" onClick={onOpenSidebar}>
+            <Icon.Menu />
+          </IconButton>
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-semibold tracking-tight text-[#F2F2F5] truncate">
+              {conversation.title || '새 대화'}
+            </div>
+            <div className="text-[11px] text-[#6A6A74] mt-0.5">
+              컨텍스트: KB {kbCount}개 · 히스토리 {conversation.messages?.length ?? 0}개
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function ChatComposer({ onSend, sending }) {
+      const [text, setText] = useState('');
+      const textareaRef = useRef(null);
+
+      const submit = () => {
+        const trimmed = text.trim();
+        if (!trimmed || sending) return;
+        onSend(trimmed);
+        setText('');
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      };
+
+      const handleKey = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          submit();
+        }
+      };
+
+      const handleChange = (e) => {
+        setText(e.target.value);
+        const el = textareaRef.current;
+        if (el) {
+          el.style.height = 'auto';
+          el.style.height = Math.min(el.scrollHeight, 220) + 'px';
+        }
+      };
+
+      return (
+        <div className="shrink-0 px-4 md:px-8 pb-4 pt-3 border-t border-[#1A1A22] bg-[#0B0B0F]">
+          <div className="max-w-[860px] mx-auto">
+            <div className="flex items-end gap-2 bg-[#14141A] border border-[#26262E] rounded-[14px] p-2
+              focus-within:border-violet-500/60 focus-within:ring-2 focus-within:ring-violet-500/20 transition-colors">
+              <textarea
+                ref={textareaRef}
+                value={text}
+                onChange={handleChange}
+                onKeyDown={handleKey}
+                placeholder="강의 내용에 대해 질문해보세요… (Enter 전송 · Shift+Enter 줄바꿈)"
+                rows={1}
+                disabled={sending}
+                className="flex-1 bg-transparent resize-none outline-none text-[14.5px] leading-relaxed text-[#E6E6EA] placeholder:text-[#5A5A64] px-2 py-2 max-h-[220px]"
+              />
+              <Button
+                variant="primary"
+                size="md"
+                onClick={submit}
+                disabled={sending || !text.trim()}
+                className="!h-9 !px-3.5"
+                title="전송"
+              >
+                <Icon.Send />
+                <span className="hidden sm:inline">{sending ? '전송중' : '전송'}</span>
+              </Button>
+            </div>
+            <div className="mt-2 text-[10.5px] text-[#5A5A64] text-center">
+              {sending ? '생각하는 중…' : 'Enter 로 전송 · Shift+Enter 로 줄바꿈'}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function ChatView({ conversation, kbMap, kbCount, onSend, sending, onCitationClick, onOpenSidebar }) {
+      const scrollRef = useRef(null);
+      useEffect(() => {
+        if (!scrollRef.current) return;
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }, [conversation?.messages?.length, sending]);
+
+      if (!conversation) return null;
+
+      const messages = conversation.messages || [];
+
+      return (
+        <div className="flex flex-col h-full flex-1 min-w-0">
+          <ChatHeader conversation={conversation} kbCount={kbCount} onOpenSidebar={onOpenSidebar} />
+          <div ref={scrollRef} className="flex-1 overflow-y-auto">
+            <div className="max-w-[860px] mx-auto px-4 md:px-8 py-6 space-y-6">
+              {messages.length === 0 && !sending && (
+                <div className="text-center py-16">
+                  <div className="w-10 h-10 mx-auto mb-4 rounded-xl bg-violet-500/15 border border-violet-400/30 flex items-center justify-center text-violet-300">
+                    <Icon.Chat />
+                  </div>
+                  <div className="text-sm text-[#8A8A94]">첫 질문을 입력해보세요.</div>
+                </div>
+              )}
+              {messages.map((m) => (
+                <MessageBubble key={m.id} message={m} kbMap={kbMap} onCitationClick={onCitationClick} />
+              ))}
+              {sending && (
+                <div className="flex items-start gap-2 pl-7">
+                  <span className="inline-flex items-center">
+                    <span className="dot" /><span className="dot" /><span className="dot" />
+                  </span>
+                  <span className="text-[12px] text-[#8A8A94]">생각하는 중…</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <ChatComposer onSend={onSend} sending={sending} />
+        </div>
+      );
+    }
+
+    // ========================================
+    // Knowledge view
+    // ========================================
+    function KnowledgeEmpty({ onCreate }) {
+      return (
+        <div className="flex-1 flex items-center justify-center px-6">
+          <div className="max-w-md text-center">
+            <div className="w-12 h-12 mx-auto mb-5 rounded-2xl bg-violet-500/15 border border-violet-400/30 flex items-center justify-center text-violet-300">
+              <Icon.Plus />
+            </div>
+            <h2 className="text-xl font-semibold tracking-tight text-[#F2F2F5]">지식 베이스 비어있음</h2>
+            <p className="mt-2 text-sm text-[#8A8A94] leading-relaxed">
+              강의 노트, 샘플 코드 등을 미리 등록해두면 에이전트가 질문에 답할 때 참고합니다.
+            </p>
+            <div className="mt-6">
+              <Button variant="primary" onClick={onCreate}><Icon.Plus /> 자료 추가</Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function KnowledgeEditor({ initial, onSave, onCancel, onDelete, onOpenSidebar }) {
+      const isNew = !initial || !initial.id;
+      const [kind, setKind] = useState(initial?.kind || 'text');
+      const [title, setTitle] = useState(initial?.title || '');
+      const [language, setLanguage] = useState(initial?.language || '');
+      const [content, setContent] = useState(initial?.content || '');
+      const [saving, setSaving] = useState(false);
+
+      useEffect(() => {
+        setKind(initial?.kind || 'text');
+        setTitle(initial?.title || '');
+        setLanguage(initial?.language || '');
+        setContent(initial?.content || '');
+      }, [initial?.id, initial?.kind]);
+
+      const submit = async () => {
+        if (!title.trim() || !content.trim()) return;
+        setSaving(true);
+        try {
+          await onSave({ kind, title: title.trim(), language: kind === 'code' ? language.trim() : undefined, content });
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="flex flex-col h-full flex-1 min-w-0">
+          <div className="shrink-0 px-4 md:px-8 py-3.5 border-b border-[#1A1A22] flex items-center gap-3">
+            <IconButton className="md:hidden" title="메뉴" onClick={onOpenSidebar}>
+              <Icon.Menu />
+            </IconButton>
+            <div className="flex-1 min-w-0">
+              <div className="text-[15px] font-semibold tracking-tight text-[#F2F2F5] truncate">
+                {isNew ? '새 자료 추가' : '자료 편집'}
+              </div>
+              <div className="text-[11px] text-[#6A6A74] mt-0.5">
+                {isNew ? '강의 자료를 등록합니다' : '기존 자료의 내용을 수정합니다'}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {!isNew && onDelete && (
+                <Button variant="danger" size="sm" onClick={onDelete}>
+                  <Icon.Trash /> 삭제
+                </Button>
+              )}
+              <Button variant="secondary" size="sm" onClick={onCancel}>취소</Button>
+              <Button variant="primary" size="sm" onClick={submit} disabled={saving || !title.trim() || !content.trim()}>
+                {saving ? '저장 중…' : '저장'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-[860px] mx-auto px-4 md:px-8 py-6 space-y-5">
+              <div>
+                <span className="block text-xs font-medium text-[#8A8A94] mb-1.5">종류</span>
+                <TabBar
+                  tabs={[{ value: 'text', label: '텍스트' }, { value: 'code', label: '코드' }]}
+                  value={kind}
+                  onChange={setKind}
+                />
+              </div>
+
+              <Input
+                label="제목"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="예: 3주차 - React Hooks 핵심 정리"
+              />
+
+              {kind === 'code' && (
+                <Input
+                  label="언어 (선택)"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  placeholder="예: javascript, python, typescript"
+                />
+              )}
+
+              <Textarea
+                label={kind === 'code' ? '코드' : '본문'}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={kind === 'code' ? '코드를 여기에 붙여넣으세요' : '자료 내용을 입력하세요 (Markdown 지원)'}
+                rows={16}
+                mono={kind === 'code'}
+              />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function KnowledgeDetail({ item, onEdit, onDelete, onOpenSidebar }) {
+      return (
+        <div className="flex flex-col h-full flex-1 min-w-0">
+          <div className="shrink-0 px-4 md:px-8 py-3.5 border-b border-[#1A1A22] flex items-center gap-3">
+            <IconButton className="md:hidden" title="메뉴" onClick={onOpenSidebar}>
+              <Icon.Menu />
+            </IconButton>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <Badge variant={item.kind === 'code' ? 'code' : 'text'}>{item.kind === 'code' ? 'CODE' : 'TEXT'}</Badge>
+                {item.kind === 'code' && item.language && (
+                  <span className="text-[10px] text-[#8A8A94] uppercase tracking-wider">{item.language}</span>
+                )}
+              </div>
+              <div className="mt-1 text-[15px] font-semibold tracking-tight text-[#F2F2F5] truncate">
+                {item.title || '(제목 없음)'}
+              </div>
+              <div className="text-[11px] text-[#6A6A74] mt-0.5">
+                등록 {formatDate(item.createdAt)}{item.updatedAt && item.updatedAt !== item.createdAt ? ` · 수정 ${formatDate(item.updatedAt)}` : ''}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="danger" size="sm" onClick={onDelete}><Icon.Trash /> 삭제</Button>
+              <Button variant="primary" size="sm" onClick={onEdit}><Icon.Edit /> 수정</Button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-[860px] mx-auto px-4 md:px-8 py-6">
+              {item.kind === 'code' ? (
+                <pre className="mono text-[13px] leading-[1.55] bg-[#0A0A0F] border border-[#26262E] rounded-[10px] p-4 overflow-x-auto whitespace-pre text-[#E6E6EA]">
+                  {item.content}
+                </pre>
+              ) : (
+                <div className="whitespace-pre-wrap text-[14.5px] leading-relaxed text-[#E6E6EA]">
+                  {item.content}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // App
+    // ========================================
+    function App() {
+      const toast = useToast();
+
+      // Tab + sidebar
+      const [tab, setTab] = useState('chat');
+      const [mobileOpen, setMobileOpen] = useState(false);
+
+      // Conversations
+      const [conversations, setConversations] = useState([]);
+      const [loadingConvos, setLoadingConvos] = useState(true);
+      const [activeConversationId, setActiveConversationId] = useState(null);
+      const [activeConversation, setActiveConversation] = useState(null);
+      const [sending, setSending] = useState(false);
+
+      // Knowledge base
+      const [kbItems, setKbItems] = useState([]);
+      const [loadingKb, setLoadingKb] = useState(true);
+      const [activeKbId, setActiveKbId] = useState(null);
+      const [kbMode, setKbMode] = useState('view'); // 'view' | 'edit' | 'new'
+      const [kbDraft, setKbDraft] = useState(null);
+
+      const [health, setHealth] = useState(null);
+
+      const kbMap = useMemo(() => {
+        const m = {};
+        kbItems.forEach((it) => { m[it.id] = it; });
+        return m;
+      }, [kbItems]);
+
+      const activeKbItem = useMemo(() => kbItems.find((x) => x.id === activeKbId) || null, [kbItems, activeKbId]);
+
+      // ---- Loaders ----
+      const loadConversations = useCallback(async () => {
+        try {
+          const d = await api('/conversations');
+          setConversations(d.conversations || []);
+        } catch (e) {
+          toast(e.message || '대화 목록을 불러오지 못했습니다', 'error');
+        } finally {
+          setLoadingConvos(false);
+        }
+      }, [toast]);
+
+      const loadKb = useCallback(async () => {
+        try {
+          const d = await api('/knowledge');
+          setKbItems(d.items || []);
+        } catch (e) {
+          toast(e.message || '지식 베이스를 불러오지 못했습니다', 'error');
+        } finally {
+          setLoadingKb(false);
+        }
+      }, [toast]);
+
+      const loadHealth = useCallback(async () => {
+        try {
+          const d = await api('/health');
+          setHealth(d);
+        } catch {
+          /* ignore */
+        }
+      }, []);
+
+      const loadConversation = useCallback(async (id) => {
+        try {
+          const d = await api(`/conversations/${id}`);
+          setActiveConversation(d.conversation || null);
+        } catch (e) {
+          toast(e.message || '대화를 불러오지 못했습니다', 'error');
+          setActiveConversation(null);
+          setActiveConversationId(null);
+        }
+      }, [toast]);
+
+      // ---- Init ----
+      useEffect(() => {
+        loadConversations();
+        loadKb();
+        loadHealth();
+      }, [loadConversations, loadKb, loadHealth]);
+
+      // Restore last conversation id
+      useEffect(() => {
+        if (loadingConvos) return;
+        const stored = localStorage.getItem('classAgent:lastConvId');
+        if (stored && conversations.find((c) => c.id === stored)) {
+          setActiveConversationId(stored);
+        } else if (conversations.length > 0 && !activeConversationId) {
+          // do not auto-select; let user click
+        }
+        // eslint-disable-next-line
+      }, [loadingConvos]);
+
+      // Load active conversation whenever id changes
+      useEffect(() => {
+        if (!activeConversationId) {
+          setActiveConversation(null);
+          return;
+        }
+        loadConversation(activeConversationId);
+        localStorage.setItem('classAgent:lastConvId', activeConversationId);
+      }, [activeConversationId, loadConversation]);
+
+      // ---- Conversation actions ----
+      const createConversation = async () => {
+        try {
+          const d = await api('/conversations', { method: 'POST', body: JSON.stringify({}) });
+          const conv = d.conversation;
+          setConversations((prev) => [conv, ...prev]);
+          setActiveConversationId(conv.id);
+          setTab('chat');
+          setMobileOpen(false);
+          toast('새 대화를 만들었어요', 'success');
+        } catch (e) {
+          toast(e.message || '대화 생성 실패', 'error');
+        }
+      };
+
+      const deleteConversation = async (c) => {
+        if (!confirm(`"${c.title || '새 대화'}" 대화를 삭제할까요?`)) return;
+        try {
+          await api(`/conversations/${c.id}`, { method: 'DELETE' });
+          setConversations((prev) => prev.filter((x) => x.id !== c.id));
+          if (activeConversationId === c.id) {
+            setActiveConversationId(null);
+            setActiveConversation(null);
+            localStorage.removeItem('classAgent:lastConvId');
+          }
+          toast('대화를 삭제했어요', 'success');
+        } catch (e) {
+          toast(e.message || '삭제 실패', 'error');
+        }
+      };
+
+      const sendMessage = async (message) => {
+        if (!activeConversationId || sending) return;
+        setSending(true);
+
+        // Optimistic: append user message
+        const tempUserMsg = {
+          id: 'tmp-' + Date.now(),
+          role: 'user',
+          content: message,
+          createdAt: new Date().toISOString(),
+        };
+        setActiveConversation((prev) => prev ? { ...prev, messages: [...(prev.messages || []), tempUserMsg] } : prev);
+
+        try {
+          const d = await api(`/conversations/${activeConversationId}/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ message }),
+          });
+          const { userMessage, assistantMessage, conversation } = d;
+
+          setActiveConversation((prev) => {
+            if (!prev) return prev;
+            const filtered = (prev.messages || []).filter((m) => m.id !== tempUserMsg.id);
+            return {
+              ...prev,
+              title: conversation?.title || prev.title,
+              messages: [...filtered, userMessage, assistantMessage].filter(Boolean),
+            };
+          });
+
+          // Update conversation list entry (title + updatedAt + messageCount)
+          setConversations((prev) => {
+            const updated = prev.map((c) => c.id === activeConversationId
+              ? {
+                  ...c,
+                  title: conversation?.title || c.title,
+                  updatedAt: conversation?.updatedAt || new Date().toISOString(),
+                  messageCount: (c.messageCount ?? 0) + 2,
+                }
+              : c
+            );
+            // Move active to top
+            updated.sort((a, b) => (a.id === activeConversationId ? -1 : b.id === activeConversationId ? 1 : 0));
+            return updated;
+          });
+        } catch (e) {
+          // Rollback optimistic message
+          setActiveConversation((prev) => prev ? {
+            ...prev,
+            messages: (prev.messages || []).filter((m) => m.id !== tempUserMsg.id),
+          } : prev);
+          toast(e.message || '메시지 전송 실패', 'error');
+        } finally {
+          setSending(false);
+        }
+      };
+
+      // ---- KB actions ----
+      const openKbNew = () => {
+        setTab('kb');
+        setActiveKbId(null);
+        setKbMode('new');
+        setKbDraft({ kind: 'text', title: '', content: '', language: '' });
+        setMobileOpen(false);
+      };
+
+      const openKbEdit = (item) => {
+        setTab('kb');
+        setActiveKbId(item.id);
+        setKbMode('edit');
+        setKbDraft(item);
+        setMobileOpen(false);
+      };
+
+      const openKbDetail = (id) => {
+        setTab('kb');
+        setActiveKbId(id);
+        setKbMode('view');
+        setKbDraft(null);
+        setMobileOpen(false);
+      };
+
+      const saveKb = async (payload) => {
+        try {
+          if (kbMode === 'new') {
+            const d = await api('/knowledge', { method: 'POST', body: JSON.stringify(payload) });
+            const item = d.item;
+            setKbItems((prev) => [item, ...prev]);
+            setActiveKbId(item.id);
+            setKbMode('view');
+            setKbDraft(null);
+            toast('자료를 추가했어요', 'success');
+          } else if (kbMode === 'edit' && activeKbId) {
+            const d = await api(`/knowledge/${activeKbId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+            const item = d.item;
+            setKbItems((prev) => prev.map((x) => x.id === item.id ? item : x));
+            setKbMode('view');
+            setKbDraft(null);
+            toast('자료를 수정했어요', 'success');
+          }
+          loadHealth();
+        } catch (e) {
+          toast(e.message || '저장 실패', 'error');
+        }
+      };
+
+      const deleteKb = async (item) => {
+        const target = item || activeKbItem;
+        if (!target) return;
+        if (!confirm(`"${target.title || '(제목 없음)'}" 자료를 삭제할까요?`)) return;
+        try {
+          await api(`/knowledge/${target.id}`, { method: 'DELETE' });
+          setKbItems((prev) => prev.filter((x) => x.id !== target.id));
+          if (activeKbId === target.id) {
+            setActiveKbId(null);
+            setKbMode('view');
+            setKbDraft(null);
+          }
+          toast('자료를 삭제했어요', 'success');
+          loadHealth();
+        } catch (e) {
+          toast(e.message || '삭제 실패', 'error');
+        }
+      };
+
+      const handleCitationClick = (kbId) => {
+        const exists = kbItems.find((x) => x.id === kbId);
+        if (!exists) {
+          toast('해당 자료를 찾을 수 없습니다', 'error');
+          return;
+        }
+        openKbDetail(kbId);
+      };
+
+      // ---- Render ----
+      const mainContent = (() => {
+        if (tab === 'chat') {
+          if (!activeConversation) return <ChatEmpty onCreate={createConversation} />;
+          return (
+            <ChatView
+              conversation={activeConversation}
+              kbMap={kbMap}
+              kbCount={kbItems.length}
+              onSend={sendMessage}
+              sending={sending}
+              onCitationClick={handleCitationClick}
+              onOpenSidebar={() => setMobileOpen(true)}
+            />
+          );
+        }
+        // KB tab
+        if (kbMode === 'new' || kbMode === 'edit') {
+          return (
+            <KnowledgeEditor
+              initial={kbDraft}
+              onSave={saveKb}
+              onCancel={() => {
+                if (kbMode === 'new') {
+                  setKbMode('view');
+                  setKbDraft(null);
+                  setActiveKbId(null);
+                } else {
+                  setKbMode('view');
+                  setKbDraft(null);
+                }
+              }}
+              onDelete={kbMode === 'edit' && activeKbItem ? () => deleteKb(activeKbItem) : undefined}
+              onOpenSidebar={() => setMobileOpen(true)}
+            />
+          );
+        }
+        if (!activeKbItem) return <KnowledgeEmpty onCreate={openKbNew} />;
+        return (
+          <KnowledgeDetail
+            item={activeKbItem}
+            onEdit={() => openKbEdit(activeKbItem)}
+            onDelete={() => deleteKb(activeKbItem)}
+            onOpenSidebar={() => setMobileOpen(true)}
+          />
+        );
+      })();
+
+      return (
+        <div className="h-full flex relative">
+          {/* Desktop sidebar */}
+          <div className="hidden md:flex h-full">
+            <Sidebar
+              tab={tab}
+              setTab={setTab}
+              conversations={conversations}
+              activeConversationId={activeConversationId}
+              onSelectConversation={(id) => { setActiveConversationId(id); setTab('chat'); }}
+              onCreateConversation={createConversation}
+              onDeleteConversation={deleteConversation}
+              loadingConvos={loadingConvos}
+              kbItems={kbItems}
+              activeKbId={activeKbId}
+              onSelectKb={openKbDetail}
+              onCreateKb={openKbNew}
+              onEditKb={openKbEdit}
+              onDeleteKb={deleteKb}
+              loadingKb={loadingKb}
+              health={health}
+            />
+          </div>
+
+          {/* Mobile drawer */}
+          {mobileOpen && (
+            <div className="md:hidden fixed inset-0 z-40 flex">
+              <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
+              <div className="relative h-full">
+                <Sidebar
+                  tab={tab}
+                  setTab={setTab}
+                  conversations={conversations}
+                  activeConversationId={activeConversationId}
+                  onSelectConversation={(id) => { setActiveConversationId(id); setTab('chat'); setMobileOpen(false); }}
+                  onCreateConversation={createConversation}
+                  onDeleteConversation={deleteConversation}
+                  loadingConvos={loadingConvos}
+                  kbItems={kbItems}
+                  activeKbId={activeKbId}
+                  onSelectKb={(id) => { openKbDetail(id); setMobileOpen(false); }}
+                  onCreateKb={openKbNew}
+                  onEditKb={openKbEdit}
+                  onDeleteKb={deleteKb}
+                  loadingKb={loadingKb}
+                  health={health}
+                  onClose={() => setMobileOpen(false)}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Main */}
+          <main className="flex-1 min-w-0 h-full flex flex-col">
+            {mainContent}
+          </main>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Render
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <ToastProvider>
+        <App />
+      </ToastProvider>
+    );
+  </script>
+</body>
+</html>
