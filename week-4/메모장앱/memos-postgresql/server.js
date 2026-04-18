@@ -33,9 +33,13 @@ async function initDB() {
       id         SERIAL PRIMARY KEY,
       title      TEXT,
       content    TEXT,
+      color      TEXT,
+      priority   INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await getPool().query(`ALTER TABLE memos ADD COLUMN IF NOT EXISTS color TEXT`);
+  await getPool().query(`ALTER TABLE memos ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 0`);
   dbInitialized = true;
 }
 
@@ -69,13 +73,21 @@ function normalizeField(raw) {
   return { provided: true, value: trimmed === '' ? null : trimmed };
 }
 
+// Priority is an integer 0–2. undefined => not provided. Anything else clamped.
+function normalizePriority(raw) {
+  if (raw === undefined) return { provided: false, value: 0 };
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return { provided: true, value: 0 };
+  return { provided: true, value: Math.max(0, Math.min(2, Math.trunc(n))) };
+}
+
 // ---------- Routes ----------
 
 // GET /api/memos — list all, newest first
 app.get('/api/memos', async (_req, res) => {
   try {
     const { rows } = await getPool().query(
-      'SELECT id, title, content, created_at FROM memos ORDER BY id DESC'
+      'SELECT id, title, content, color, priority, created_at FROM memos ORDER BY id DESC'
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -89,9 +101,11 @@ app.post('/api/memos', async (req, res) => {
   try {
     const title = normalizeField(req.body?.title).value;
     const content = normalizeField(req.body?.content).value;
+    const color = normalizeField(req.body?.color).value;
+    const priority = normalizePriority(req.body?.priority).value;
     const { rows } = await getPool().query(
-      'INSERT INTO memos (title, content) VALUES ($1, $2) RETURNING id, title, content, created_at',
-      [title, content]
+      'INSERT INTO memos (title, content, color, priority) VALUES ($1, $2, $3, $4) RETURNING id, title, content, color, priority, created_at',
+      [title, content, color, priority]
     );
     res.status(201).json({ success: true, data: rows[0] });
   } catch (err) {
@@ -110,11 +124,13 @@ app.patch('/api/memos/:id', async (req, res) => {
 
     const titleField = normalizeField(req.body?.title);
     const contentField = normalizeField(req.body?.content);
+    const colorField = normalizeField(req.body?.color);
+    const priorityField = normalizePriority(req.body?.priority);
 
     // Empty body → return current row unchanged
-    if (!titleField.provided && !contentField.provided) {
+    if (!titleField.provided && !contentField.provided && !colorField.provided && !priorityField.provided) {
       const { rows } = await getPool().query(
-        'SELECT id, title, content, created_at FROM memos WHERE id = $1',
+        'SELECT id, title, content, color, priority, created_at FROM memos WHERE id = $1',
         [id]
       );
       if (rows.length === 0) {
@@ -134,10 +150,18 @@ app.patch('/api/memos/:id', async (req, res) => {
       sets.push(`content = $${i++}`);
       values.push(contentField.value);
     }
+    if (colorField.provided) {
+      sets.push(`color = $${i++}`);
+      values.push(colorField.value);
+    }
+    if (priorityField.provided) {
+      sets.push(`priority = $${i++}`);
+      values.push(priorityField.value);
+    }
     values.push(id);
 
     const { rows } = await getPool().query(
-      `UPDATE memos SET ${sets.join(', ')} WHERE id = $${i} RETURNING id, title, content, created_at`,
+      `UPDATE memos SET ${sets.join(', ')} WHERE id = $${i} RETURNING id, title, content, color, priority, created_at`,
       values
     );
     if (rows.length === 0) {
@@ -158,7 +182,7 @@ app.delete('/api/memos/:id', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid id' });
     }
     const { rows } = await getPool().query(
-      'DELETE FROM memos WHERE id = $1 RETURNING id, title, content, created_at',
+      'DELETE FROM memos WHERE id = $1 RETURNING id, title, content, color, priority, created_at',
       [id]
     );
     if (rows.length === 0) {
