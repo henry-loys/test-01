@@ -1,0 +1,11 @@
+{
+  "id": "soy_sauce",
+  "name": "간장",
+  "nameEn": "Soy Sauce",
+  "category": "반찬/장류",
+  "quantity": 500,
+  "unit": "ml",
+  "expiryDate": "2027-03-15",
+  "storage": "냉장",
+  "emoji": "🍶"
+}

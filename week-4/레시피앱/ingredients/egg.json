@@ -1,0 +1,11 @@
+{
+  "id": "egg",
+  "name": "계란",
+  "nameEn": "Egg",
+  "category": "유제품/난류",
+  "quantity": 10,
+  "unit": "개",
+  "expiryDate": "2026-05-10",
+  "storage": "냉장",
+  "emoji": "🥚"
+}

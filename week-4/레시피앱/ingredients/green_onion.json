@@ -1,0 +1,11 @@
+{
+  "id": "green_onion",
+  "name": "대파",
+  "nameEn": "Green Onion",
+  "category": "채소",
+  "quantity": 2,
+  "unit": "단",
+  "expiryDate": "2026-05-05",
+  "storage": "냉장",
+  "emoji": "🌿"
+}

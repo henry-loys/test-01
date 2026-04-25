@@ -1,0 +1,11 @@
+{
+  "id": "ice_cream",
+  "name": "바닐라 아이스크림",
+  "nameEn": "Vanilla Ice Cream",
+  "category": "디저트",
+  "quantity": 1,
+  "unit": "통",
+  "expiryDate": "2026-10-25",
+  "storage": "냉동",
+  "emoji": "🍨"
+}

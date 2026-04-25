@@ -1,0 +1,11 @@
+{
+  "id": "pork_belly",
+  "name": "삼겹살",
+  "nameEn": "Pork Belly",
+  "category": "육류",
+  "quantity": 600,
+  "unit": "g",
+  "expiryDate": "2026-04-28",
+  "storage": "냉장",
+  "emoji": "🥩"
+}

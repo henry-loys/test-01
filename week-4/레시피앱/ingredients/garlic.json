@@ -1,0 +1,11 @@
+{
+  "id": "garlic",
+  "name": "마늘",
+  "nameEn": "Garlic",
+  "category": "채소",
+  "quantity": 200,
+  "unit": "g",
+  "expiryDate": "2026-06-10",
+  "storage": "냉장",
+  "emoji": "🧄"
+}

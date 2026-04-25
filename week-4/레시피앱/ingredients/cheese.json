@@ -1,0 +1,11 @@
+{
+  "id": "cheese",
+  "name": "체다 슬라이스 치즈",
+  "nameEn": "Cheddar Cheese",
+  "category": "유제품/난류",
+  "quantity": 12,
+  "unit": "장",
+  "expiryDate": "2026-06-01",
+  "storage": "냉장",
+  "emoji": "🧀"
+}

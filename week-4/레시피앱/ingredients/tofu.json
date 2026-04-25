@@ -1,0 +1,11 @@
+{
+  "id": "tofu",
+  "name": "두부",
+  "nameEn": "Tofu",
+  "category": "콩류",
+  "quantity": 1,
+  "unit": "모",
+  "expiryDate": "2026-04-30",
+  "storage": "냉장",
+  "emoji": "🍱"
+}

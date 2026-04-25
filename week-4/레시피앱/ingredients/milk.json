@@ -1,0 +1,11 @@
+{
+  "id": "milk",
+  "name": "우유",
+  "nameEn": "Milk",
+  "category": "유제품/난류",
+  "quantity": 1,
+  "unit": "L",
+  "expiryDate": "2026-05-02",
+  "storage": "냉장",
+  "emoji": "🥛"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "onion",
+  "name": "양파",
+  "nameEn": "Onion",
+  "category": "채소",
+  "quantity": 3,
+  "unit": "개",
+  "expiryDate": "2026-05-20",
+  "storage": "냉장",
+  "emoji": "🧅"
+}
