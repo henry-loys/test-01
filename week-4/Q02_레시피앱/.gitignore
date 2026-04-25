@@ -1,0 +1,15 @@
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+
+# Local SQLite backup (no longer the live store)
+recipe-sqlite/recipe.db
+recipe-sqlite/recipe.db-shm
+recipe-sqlite/recipe.db-wal
+
+# macOS
+.DS_Store
