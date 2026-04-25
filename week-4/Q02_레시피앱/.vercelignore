@@ -1,0 +1,7 @@
+.env
+.env.*
+!.env.example
+node_modules/
+recipe-sqlite/
+과정(스크린샷)/
+.DS_Store

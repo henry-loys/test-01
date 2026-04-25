@@ -13,3 +13,4 @@ recipe-sqlite/recipe.db-wal
 
 # macOS
 .DS_Store
+.vercel
