@@ -1,0 +1,62 @@
+[
+  {
+    "category": "work",
+    "title": "업무 TODO 리스트",
+    "order": 1,
+    "items": [
+      { "text": "주간 보고서 작성", "completed": true },
+      { "text": "팀 미팅 자료 준비", "completed": true },
+      { "text": "이메일 확인 및 회신", "completed": true },
+      { "text": "프로젝트 일정 업데이트", "completed": false },
+      { "text": "코드 리뷰 진행", "completed": false }
+    ]
+  },
+  {
+    "category": "study",
+    "title": "학습 TODO 리스트",
+    "order": 2,
+    "items": [
+      { "text": "Python 기초 강의 수강", "completed": false },
+      { "text": "알고리즘 문제 3개 풀기", "completed": true },
+      { "text": "영어 단어 50개 암기", "completed": false },
+      { "text": "기술 블로그 1편 읽기", "completed": false },
+      { "text": "독서 30분 하기", "completed": true }
+    ]
+  },
+  {
+    "category": "health",
+    "title": "건강 TODO 리스트",
+    "order": 3,
+    "items": [
+      { "text": "아침 스트레칭 10분", "completed": true },
+      { "text": "물 2L 마시기", "completed": true },
+      { "text": "유산소 운동 30분", "completed": false },
+      { "text": "근력 운동 20분", "completed": false },
+      { "text": "11시 전에 취침하기", "completed": false }
+    ]
+  },
+  {
+    "category": "home",
+    "title": "집안일 TODO 리스트",
+    "order": 4,
+    "items": [
+      { "text": "빨래 돌리기", "completed": false },
+      { "text": "청소기 돌리기", "completed": true },
+      { "text": "냉장고 정리", "completed": false },
+      { "text": "분리수거 배출", "completed": true },
+      { "text": "화분에 물 주기", "completed": false }
+    ]
+  },
+  {
+    "category": "hobby",
+    "title": "취미 TODO 리스트",
+    "order": 5,
+    "items": [
+      { "text": "기타 연습 30분", "completed": false },
+      { "text": "사진 촬영 나가기", "completed": false },
+      { "text": "영화 한 편 감상", "completed": true },
+      { "text": "일기 쓰기", "completed": false },
+      { "text": "새로운 레시피 도전하기", "completed": false }
+    ]
+  }
+]
