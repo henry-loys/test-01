@@ -450,6 +450,152 @@ app.post('/api/recipes', async (req, res) => {
   }
 });
 
+// POST /api/recipes/generate — generate (but don't save) a recipe via OpenAI
+// using the current ingredients in the database. Prioritizes items closest to
+// expiry. Response shape matches what POST /api/recipes accepts, so the client
+// can save the preview verbatim.
+app.post('/api/recipes/generate', async (req, res) => {
+  try {
+    const apiKey = (process.env.OPENAI_API_KEY || '').trim();
+    if (!apiKey) {
+      return res.status(500).json({
+        success: false,
+        message: 'OPENAI_API_KEY 환경변수가 설정되어 있지 않아요.',
+      });
+    }
+
+    const { rows: ingredients } = await pool.query(
+      `SELECT name, "nameEn", category, quantity, unit, "expiryDate", storage, emoji
+         FROM ingredients
+        ORDER BY "expiryDate" NULLS LAST`
+    );
+
+    if (ingredients.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '냉장고에 재료가 없어요. 먼저 재료를 추가해 주세요.',
+      });
+    }
+
+    const hints = (req.body && typeof req.body.hints === 'string')
+      ? req.body.hints.trim()
+      : '';
+
+    const today = new Date().toISOString().slice(0, 10);
+    const inventory = ingredients.map((i) => {
+      const qty = i.quantity != null ? ` ${i.quantity}${i.unit || ''}` : '';
+      return `- ${i.emoji ? i.emoji + ' ' : ''}${i.name}${qty} (유통기한 ${i.expiryDate || '미상'}, ${i.storage || ''})`;
+    }).join('\n');
+
+    const systemPrompt = `당신은 한국 가정식 전문 셰프입니다. 사용자의 냉장고 재료를 보고 한국 가정식 레시피 1개를 추천하세요.
+
+원칙:
+- 2인분 기준
+- 조리 시간 20분 이내
+- 초급자도 만족할 수 있는 친숙한 가정식
+- 유통기한이 임박한 재료를 우선 활용
+- 조리 순서는 한 단계씩 명확하고 짧게 (3~7단계)
+
+반드시 다음 JSON 스키마로만 응답하세요. 다른 설명/머리말/꼬리말 금지.
+{
+  "title": "요리명 (한국어)",
+  "ingredients": [
+    {"name": "재료명 (한국어)", "source": "fridge | extra"}
+  ],
+  "steps": ["1단계 설명", "2단계 설명", "..."]
+}
+
+source 규칙:
+- 사용자의 냉장고에 이미 있는 재료면 "fridge"
+- 냉장고에 없는데 추가로 필요한 재료(소금, 후추, 설탕, 식용유 등)면 "extra"`;
+
+    const userPrompt = `오늘 날짜: ${today}
+
+냉장고 재료 목록 (유통기한 임박 순):
+${inventory}
+${hints ? `\n사용자 추가 요청사항: ${hints}` : ''}
+
+위 재료 중 유통기한이 가까운 것을 우선해서 한국 가정식 레시피 1개를 만들어 주세요.`;
+
+    const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.7,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      }),
+    });
+
+    if (!openaiRes.ok) {
+      const text = await openaiRes.text().catch(() => '');
+      console.error('[server] OpenAI error:', openaiRes.status, text);
+      return res.status(502).json({
+        success: false,
+        message: `AI 응답 실패 (${openaiRes.status})`,
+      });
+    }
+
+    const data = await openaiRes.json();
+    const content = data?.choices?.[0]?.message?.content || '';
+
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (e) {
+      return res.status(502).json({
+        success: false,
+        message: 'AI가 올바른 JSON을 반환하지 않았어요.',
+      });
+    }
+
+    const title = typeof parsed.title === 'string' ? parsed.title.trim() : '';
+    const rawIngredients = Array.isArray(parsed.ingredients) ? parsed.ingredients : [];
+    const steps = Array.isArray(parsed.steps)
+      ? parsed.steps.map((s) => (typeof s === 'string' ? s.trim() : '')).filter(Boolean)
+      : [];
+
+    const fridgeMap = new Map(ingredients.map((i) => [i.name, i.emoji || '']));
+    const normalizedIngredients = rawIngredients
+      .map((ing) => {
+        if (!ing || typeof ing.name !== 'string' || !ing.name.trim()) return null;
+        const name = ing.name.trim();
+        const inFridge = fridgeMap.has(name);
+        return {
+          name,
+          source: inFridge ? 'fridge' : (ing.source === 'fridge' ? 'fridge' : 'extra'),
+          emoji: inFridge ? fridgeMap.get(name) : '',
+        };
+      })
+      .filter(Boolean);
+
+    if (!title || normalizedIngredients.length === 0 || steps.length === 0) {
+      return res.status(502).json({
+        success: false,
+        message: 'AI 응답이 비어 있거나 형식이 올바르지 않아요.',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { title, ingredients: normalizedIngredients, steps },
+    });
+  } catch (err) {
+    console.error('[server] generate failed:', err);
+    res.status(500).json({
+      success: false,
+      message: `Failed to generate recipe: ${err.message}`,
+    });
+  }
+});
+
 // DELETE /api/recipes/:id — delete a recipe by id
 app.delete('/api/recipes/:id', async (req, res) => {
   try {
