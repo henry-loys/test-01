@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Todo · Local</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      background: #000000;
+      color: #f5f5f7;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+    }
+    /* Apple-style circular custom checkbox */
+    .apple-check {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 1.375rem;
+      height: 1.375rem;
+      border: 1.5px solid #3a3a3c;
+      border-radius: 9999px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      background: transparent;
+      flex-shrink: 0;
+    }
+    .apple-check:hover { border-color: #6b6b70; }
+    .apple-check:checked {
+      background: #8b5cf6;
+      border-color: #8b5cf6;
+    }
+    .apple-check:checked::after {
+      content: "";
+      width: 0.35rem;
+      height: 0.7rem;
+      border: solid white;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg) translate(-0.5px, -1px);
+    }
+    /* Subtle scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2a2a2c; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3a3a3c; }
+    /* Minimal fade-in */
+    @keyframes appleFade {
+      from { opacity: 0; transform: translateY(2px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .apple-fade { animation: appleFade 0.2s ease-out both; }
+    /* Hide native select arrow for cleaner look */
+    .apple-select {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'><path d='M1 1.5L6 6.5L11 1.5' stroke='%23a1a1a6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 0.85rem center;
+      padding-right: 2rem;
+    }
+    /* Focus ring */
+    .focus-violet:focus {
+      outline: none;
+      border-color: #8b5cf6;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // React Hooks
+    // ========================================
+    const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+    // ========================================
+    // Constants & Seed Data
+    // ========================================
+    const STORAGE_KEY = 'todos-app:v1';
+
+    const SEED_CATEGORIES = [
+      { key: 'work',   title: '업무 TODO 리스트', order: 1 },
+      { key: 'study',  title: '학습 TODO 리스트', order: 2 },
+      { key: 'health', title: '건강 TODO 리스트', order: 3 },
+      { key: 'home',   title: '집안일 TODO 리스트', order: 4 },
+      { key: 'hobby',  title: '취미 TODO 리스트', order: 5 },
+    ];
+
+    const SEED_TODOS_SPEC = [
+      // work
+      { text: '주간 보고서 작성',       completed: true,  category: 'work' },
+      { text: '팀 미팅 자료 준비',      completed: true,  category: 'work' },
+      { text: '이메일 확인 및 회신',    completed: true,  category: 'work' },
+      { text: '프로젝트 일정 업데이트', completed: false, category: 'work' },
+      { text: '코드 리뷰 진행',         completed: false, category: 'work' },
+      // study
+      { text: 'Python 기초 강의 수강',  completed: false, category: 'study' },
+      { text: '알고리즘 문제 3개 풀기', completed: true,  category: 'study' },
+      { text: '영어 단어 50개 암기',    completed: false, category: 'study' },
+      { text: '기술 블로그 1편 읽기',   completed: false, category: 'study' },
+      { text: '독서 30분 하기',         completed: true,  category: 'study' },
+      // health
+      { text: '아침 스트레칭 10분',     completed: true,  category: 'health' },
+      { text: '물 2L 마시기',           completed: true,  category: 'health' },
+      { text: '유산소 운동 30분',       completed: false, category: 'health' },
+      { text: '근력 운동 20분',         completed: false, category: 'health' },
+      { text: '11시 전에 취침하기',     completed: false, category: 'health' },
+      // home
+      { text: '빨래 돌리기',            completed: false, category: 'home' },
+      { text: '청소기 돌리기',          completed: true,  category: 'home' },
+      { text: '냉장고 정리',            completed: false, category: 'home' },
+      { text: '분리수거 배출',          completed: true,  category: 'home' },
+      { text: '화분에 물 주기',         completed: false, category: 'home' },
+      // hobby
+      { text: '기타 연습 30분',         completed: false, category: 'hobby' },
+      { text: '사진 촬영 나가기',       completed: false, category: 'hobby' },
+      { text: '영화 한 편 감상',        completed: true,  category: 'hobby' },
+      { text: '일기 쓰기',              completed: false, category: 'hobby' },
+      { text: '새로운 레시피 도전하기', completed: false, category: 'hobby' },
+    ];
+
+    function buildSeedState() {
+      const todos = SEED_TODOS_SPEC.map((t, idx) => ({
+        id: idx + 1,
+        text: t.text,
+        completed: t.completed,
+        category: t.category,
+      }));
+      return { todos, categories: SEED_CATEGORIES.slice() };
+    }
+
+    // ========================================
+    // localStorage helpers (sync, silent failure)
+    // ========================================
+    function loadFromStorage() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.todos) || !Array.isArray(parsed.categories)) {
+          return null;
+        }
+        return parsed;
+      } catch (err) {
+        console.warn('[todos-app] load failed:', err);
+        return null;
+      }
+    }
+
+    function saveToStorage(todos, categories) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ todos, categories }));
+      } catch (err) {
+        // Quota exceeded or storage disabled — fail silently
+        console.warn('[todos-app] save failed:', err);
+      }
+    }
+
+    function clearStorage() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (err) {
+        console.warn('[todos-app] clear failed:', err);
+      }
+    }
+
+    // ========================================
+    // Design System Components
+    // ========================================
+    function Button({ variant = 'primary', size = 'md', disabled, onClick, type = 'button', className = '', children, title }) {
+      const base = 'inline-flex items-center justify-center gap-2 font-medium rounded-full transition-all duration-200 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed';
+      const sizes = {
+        sm: 'px-4 py-1.5 text-[13px]',
+        md: 'px-5 py-2.5 text-sm',
+        lg: 'px-7 py-3 text-base',
+      };
+      const variants = {
+        primary:   'bg-violet-500 text-white hover:bg-violet-400 active:bg-violet-600',
+        secondary: 'bg-transparent text-white border border-white/20 hover:border-white/40 hover:bg-white/5',
+        ghost:     'text-white/50 hover:text-white/80',
+        danger:    'bg-transparent text-red-300 border border-red-400/30 hover:border-red-400/60 hover:bg-red-500/10',
+      };
+      return (
+        <button
+          type={type}
+          onClick={onClick}
+          disabled={disabled}
+          title={title}
+          className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Select({ value, onChange, options, disabled, className = '' }) {
+      return (
+        <select
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+          className={`apple-select px-4 py-3 rounded-xl bg-[#1c1c1e] border border-[#2c2c2e] text-white text-sm focus-violet transition disabled:opacity-50 ${className}`}
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value} className="bg-[#1c1c1e] text-white">
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    function IconTrash({ className = 'w-4 h-4' }) {
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          <path d="M10 11v6M14 11v6" />
+          <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+        </svg>
+      );
+    }
+
+    function IconPlus({ className = 'w-4 h-4' }) {
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      );
+    }
+
+    function IconCheck({ className = 'w-4 h-4' }) {
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      );
+    }
+
+    function IconRefresh({ className = 'w-4 h-4' }) {
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="23 4 23 10 17 10" />
+          <polyline points="1 20 1 14 7 14" />
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10" />
+          <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14" />
+        </svg>
+      );
+    }
+
+    // ========================================
+    // Layout: Header (Apple hero style)
+    // ========================================
+    function Header({ remaining, total }) {
+      return (
+        <header className="pt-12 pb-10 sm:pt-20 sm:pb-14 text-center">
+          <p className="text-[13px] font-medium text-violet-400 tracking-wide mb-3">TODO · LOCAL</p>
+          <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight text-white leading-tight">
+            오늘 할 일.
+            <br className="sm:hidden" />
+            <span className="text-[#a1a1a6]"> 단순하게.</span>
+          </h1>
+          <p className="mt-5 text-base sm:text-lg text-[#a1a1a6] max-w-xl mx-auto">
+            {total === 0
+              ? '아직 등록된 할 일이 없습니다. 첫 번째 할 일을 추가해 보세요.'
+              : <>남은 할 일 <span className="text-white font-medium">{remaining}</span>개 · 전체 <span className="text-white font-medium">{total}</span>개</>
+            }
+          </p>
+        </header>
+      );
+    }
+
+    // ========================================
+    // Category Tabs (Apple segmented control)
+    // ========================================
+    function CategoryTabs({ categories, activeKey, onChange, counts }) {
+      const tabs = [{ key: 'all', title: '전체' }, ...categories];
+      return (
+        <div className="flex justify-center mb-10">
+          <div className="inline-flex flex-wrap justify-center gap-1 p-1 rounded-full bg-[#1c1c1e] border border-[#2c2c2e]">
+            {tabs.map((tab) => {
+              const isActive = tab.key === activeKey;
+              const count = counts[tab.key] ?? 0;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => onChange(tab.key)}
+                  className={[
+                    'px-4 py-1.5 rounded-full text-[13px] font-medium transition-all duration-200 inline-flex items-center gap-2',
+                    isActive
+                      ? 'bg-violet-500 text-white'
+                      : 'text-[#a1a1a6] hover:text-white',
+                  ].join(' ')}
+                >
+                  <span>{tab.title}</span>
+                  <span className={[
+                    'text-[11px] font-medium px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center',
+                    isActive ? 'bg-white/20 text-white' : 'bg-[#2c2c2e] text-[#a1a1a6]',
+                  ].join(' ')}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Add Todo Form
+    // ========================================
+    function AddTodoForm({ categories, onAdd }) {
+      const [text, setText] = useState('');
+      const [category, setCategory] = useState(categories[0]?.key || '');
+      const inputRef = useRef(null);
+
+      useEffect(() => {
+        if (!category && categories.length > 0) setCategory(categories[0].key);
+      }, [categories, category]);
+
+      const handleSubmit = () => {
+        const trimmed = text.trim();
+        if (!trimmed || !category) return;
+        onAdd(trimmed, category);
+        setText('');
+        inputRef.current && inputRef.current.focus();
+      };
+
+      const handleKey = (e) => {
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+          e.preventDefault();
+          handleSubmit();
+        }
+      };
+
+      return (
+        <div className="mb-10">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1 relative">
+              <input
+                ref={inputRef}
+                type="text"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder="새로운 할 일"
+                className="w-full px-4 py-3 rounded-xl bg-[#1c1c1e] border border-[#2c2c2e] text-white placeholder-[#6b6b70] text-[15px] focus-violet transition"
+              />
+            </div>
+            <Select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              disabled={categories.length === 0}
+              options={categories.map((c) => ({ value: c.key, label: c.title }))}
+              className="sm:w-36"
+            />
+            <Button
+              onClick={handleSubmit}
+              disabled={!text.trim() || !category}
+            >
+              <IconPlus className="w-4 h-4" />
+              <span>추가</span>
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Todo Item (divider-based list row)
+    // ========================================
+    function TodoItem({ todo, categoryTitle, onToggle, onDelete }) {
+      return (
+        <li className="apple-fade group flex items-center gap-4 py-4 transition-colors duration-200">
+          <input
+            type="checkbox"
+            className="apple-check"
+            checked={todo.completed}
+            onChange={() => onToggle(todo)}
+            aria-label={`${todo.text} 완료 토글`}
+          />
+          <span className={`flex-1 min-w-0 truncate text-[15px] transition-colors ${todo.completed ? 'line-through text-[#6b6b70]' : 'text-white'}`}>
+            {todo.text}
+          </span>
+          {categoryTitle && (
+            <span className="hidden sm:inline-flex text-[11px] font-medium text-[#a1a1a6] bg-[#1c1c1e] border border-[#2c2c2e] rounded-full px-2.5 py-1">
+              {categoryTitle}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => onDelete(todo)}
+            title="삭제"
+            aria-label="삭제"
+            className="p-2 rounded-full text-[#6b6b70] hover:text-white hover:bg-white/5 transition opacity-0 group-hover:opacity-100 focus:opacity-100 sm:opacity-0"
+          >
+            <IconTrash className="w-4 h-4" />
+          </button>
+        </li>
+      );
+    }
+
+    // ========================================
+    // Todo List
+    // ========================================
+    function TodoList({ todos, categories, onToggle, onDelete }) {
+      const titleByKey = useMemo(() => {
+        const m = {};
+        categories.forEach((c) => { m[c.key] = c.title; });
+        return m;
+      }, [categories]);
+
+      if (todos.length === 0) {
+        return (
+          <div className="text-center py-20">
+            <div className="inline-flex w-14 h-14 rounded-full bg-[#1c1c1e] border border-[#2c2c2e] items-center justify-center mb-5">
+              <IconCheck className="w-6 h-6 text-[#6b6b70]" />
+            </div>
+            <p className="text-[#a1a1a6] text-[15px]">표시할 할 일이 없습니다</p>
+            <p className="text-[#6b6b70] text-[13px] mt-1.5">새 할 일을 추가해 보세요</p>
+          </div>
+        );
+      }
+
+      return (
+        <ul className="divide-y divide-[#2c2c2e]">
+          {todos.map((t) => (
+            <TodoItem
+              key={t.id}
+              todo={t}
+              categoryTitle={titleByKey[t.category]}
+              onToggle={onToggle}
+              onDelete={onDelete}
+            />
+          ))}
+        </ul>
+      );
+    }
+
+    // ========================================
+    // Main Page: TodoApp
+    // ========================================
+    function TodoApp() {
+      // Lazy init from localStorage; seed & persist on first run / corruption.
+      const [state, setState] = useState(() => {
+        const loaded = loadFromStorage();
+        if (loaded) return loaded;
+        const seed = buildSeedState();
+        saveToStorage(seed.todos, seed.categories);
+        return seed;
+      });
+
+      const { todos, categories } = state;
+      const [activeTab, setActiveTab] = useState('all');
+      const [resetPending, setResetPending] = useState(false);
+
+      // Persist on any change
+      useEffect(() => {
+        saveToStorage(todos, categories);
+      }, [todos, categories]);
+
+      // Cancel "pending reset" after 4s if not confirmed
+      useEffect(() => {
+        if (!resetPending) return;
+        const tid = setTimeout(() => setResetPending(false), 4000);
+        return () => clearTimeout(tid);
+      }, [resetPending]);
+
+      const nextId = useCallback(() => {
+        if (todos.length === 0) return 1;
+        return Math.max(...todos.map((t) => t.id)) + 1;
+      }, [todos]);
+
+      // ----- CRUD handlers -----
+      const handleAdd = useCallback((text, category) => {
+        setState((prev) => {
+          const id = prev.todos.length === 0
+            ? 1
+            : Math.max(...prev.todos.map((t) => t.id)) + 1;
+          return {
+            ...prev,
+            todos: [...prev.todos, { id, text, completed: false, category }],
+          };
+        });
+      }, []);
+
+      const handleToggle = useCallback((todo) => {
+        setState((prev) => ({
+          ...prev,
+          todos: prev.todos.map((t) =>
+            t.id === todo.id ? { ...t, completed: !t.completed } : t
+          ),
+        }));
+      }, []);
+
+      const handleDelete = useCallback((todo) => {
+        setState((prev) => ({
+          ...prev,
+          todos: prev.todos.filter((t) => t.id !== todo.id),
+        }));
+      }, []);
+
+      const handleClearCompleted = useCallback(() => {
+        setState((prev) => ({
+          ...prev,
+          todos: prev.todos.filter((t) => !t.completed),
+        }));
+      }, []);
+
+      const handleResetData = useCallback(() => {
+        if (!resetPending) {
+          setResetPending(true);
+          return;
+        }
+        clearStorage();
+        const seed = buildSeedState();
+        saveToStorage(seed.todos, seed.categories);
+        setState(seed);
+        setActiveTab('all');
+        setResetPending(false);
+      }, [resetPending]);
+
+      // ----- derived -----
+      const counts = useMemo(() => {
+        const c = { all: todos.length };
+        categories.forEach((cat) => { c[cat.key] = 0; });
+        todos.forEach((t) => { c[t.category] = (c[t.category] || 0) + 1; });
+        return c;
+      }, [todos, categories]);
+
+      const visibleTodos = useMemo(() => {
+        const list = activeTab === 'all' ? todos : todos.filter((t) => t.category === activeTab);
+        // Active first, then completed; preserve insertion order within each group
+        return [...list].sort((a, b) => Number(a.completed) - Number(b.completed));
+      }, [todos, activeTab]);
+
+      const remaining = useMemo(() => todos.filter((t) => !t.completed).length, [todos]);
+      const completedCount = useMemo(() => todos.filter((t) => t.completed).length, [todos]);
+
+      // ----- render -----
+      return (
+        <div className="min-h-screen">
+          <div className="max-w-3xl mx-auto px-5 sm:px-8 pb-24">
+            <Header remaining={remaining} total={todos.length} />
+
+            <AddTodoForm categories={categories} onAdd={handleAdd} />
+
+            <CategoryTabs
+              categories={categories}
+              activeKey={activeTab}
+              onChange={setActiveTab}
+              counts={counts}
+            />
+
+            <section className="border-t border-[#2c2c2e]">
+              <TodoList
+                todos={visibleTodos}
+                categories={categories}
+                onToggle={handleToggle}
+                onDelete={handleDelete}
+              />
+            </section>
+
+            {todos.length > 0 && (
+              <div className="mt-10 pt-6 border-t border-[#2c2c2e] flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-[13px] text-[#6b6b70]">
+                  총 <span className="text-[#a1a1a6]">{todos.length}</span>개 ·
+                  완료 <span className="text-[#a1a1a6]">{completedCount}</span>개 ·
+                  남음 <span className="text-[#a1a1a6]">{remaining}</span>개
+                </p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleClearCompleted}
+                  disabled={completedCount === 0}
+                  title="완료된 항목 모두 삭제"
+                >
+                  <IconTrash className="w-3.5 h-3.5" />
+                  <span>완료 항목 비우기 ({completedCount})</span>
+                </Button>
+              </div>
+            )}
+
+            <div className="mt-10 flex justify-center">
+              <Button
+                variant={resetPending ? 'danger' : 'ghost'}
+                size="sm"
+                onClick={handleResetData}
+                title="localStorage 비우고 시드 데이터로 재설정"
+              >
+                <IconRefresh className="w-3.5 h-3.5" />
+                <span>
+                  {resetPending ? '다시 눌러 초기화 확인' : '데이터 초기화'}
+                </span>
+              </Button>
+            </div>
+
+            <footer className="mt-20 pt-8 border-t border-[#1c1c1e] text-center text-[12px] text-[#6b6b70]">
+              Stored locally in your browser · {STORAGE_KEY}
+            </footer>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // App Root
+    // ========================================
+    function App() {
+      return <TodoApp />;
+    }
+
+    // ========================================
+    // Render
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
